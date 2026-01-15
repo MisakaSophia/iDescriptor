@@ -23,19 +23,20 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMessageBox>
+#include <QTimer>
 #include <sstream>
 
 QueryMobileGestaltWidget::QueryMobileGestaltWidget(iDescriptorDevice *device,
                                                    QWidget *parent)
     : QWidget(parent), m_device(device)
 {
-    // todo: not tested on iOS 17,18 but it's deprecated on iOS 26
+    // FIXME: not tested on iOS 17,18 but it's deprecated on iOS 26
     // i am assuming it won't work
     if (m_device->deviceInfo.parsedDeviceVersion.major > 16) {
         QMessageBox::warning(this, "Unsupported iOS Version",
                              "Apple deprecated this protocol for Devices "
                              "running iOS 17 or later");
-        close();
+        QTimer::singleShot(0, this, &QWidget::close);
         return;
     }
     setupUI();

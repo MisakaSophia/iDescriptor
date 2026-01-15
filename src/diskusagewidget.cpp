@@ -400,92 +400,80 @@ void DiskUsageWidget::fetchData()
 
     QFuture<QVariantMap> future = QtConcurrent::run([this]() -> QVariantMap {
         QVariantMap result;
-        // if (!m_device || !m_device->provider) {
-        //     result["error"] = "Invalid device.";
-        //     return result;
-        // }
+        if (!m_device || !m_device->provider) {
+            result["error"] = "Invalid device.";
+            return result;
+        }
 
-        // // Pre-populate with known info
-        // result["totalCapacity"] = QVariant::fromValue(
-        //     m_device->deviceInfo.diskInfo.totalDiskCapacity);
-        // result["freeSpace"] = QVariant::fromValue(
-        //     m_device->deviceInfo.diskInfo.totalDataAvailable);
-        // result["systemUsage"] = QVariant::fromValue(
-        //     m_device->deviceInfo.diskInfo.totalSystemCapacity);
+        // Pre-populate with known info
+        result["totalCapacity"] = QVariant::fromValue(
+            m_device->deviceInfo.diskInfo.totalDiskCapacity);
+        result["freeSpace"] = QVariant::fromValue(
+            m_device->deviceInfo.diskInfo.totalDataAvailable);
+        result["systemUsage"] = QVariant::fromValue(
+            m_device->deviceInfo.diskInfo.totalSystemCapacity);
 
-        // // Create provider wrapper from existing handle
-        // TODO:remove
-        // Provider provider = Provider::adopt(m_device->provider);
+        // Apps usage
+        uint64_t totalAppsSpace = 0;
 
-        // // Apps usage
-        // uint64_t totalAppsSpace = 0;
-        // auto instproxy_res =
-        // IdeviceFFI::InstallationProxy::connect(provider); if
-        // (instproxy_res.is_err()) {
-        //     result["error"] =
-        //         "Could not connect to installation proxy: " +
-        //         QString::fromStdString(instproxy_res.unwrap_err().message);
-        //     return result;
-        // }
-        // auto instproxy = std::move(instproxy_res.unwrap());
+        InstallationProxyClientHandle *installationProxyClientHandle = nullptr;
+        installation_proxy_connect(m_device->provider,
+                                   &installationProxyClientHandle);
+        auto instproxy =
+            IdeviceFFI::InstallationProxy::adopt(installationProxyClientHandle);
 
-        // plist_t client_opts = plist_new_dict();
-        // plist_dict_set_item(client_opts, "ApplicationType",
-        //                     plist_new_string("User"));
+        plist_t client_opts = plist_new_dict();
+        plist_dict_set_item(client_opts, "ApplicationType",
+                            plist_new_string("User"));
 
-        // plist_t return_attrs = plist_new_array();
-        // plist_array_append_item(return_attrs,
-        //                         plist_new_string("StaticDiskUsage"));
-        // plist_array_append_item(return_attrs,
-        //                         plist_new_string("DynamicDiskUsage"));
-        // plist_dict_set_item(client_opts, "ReturnAttributes", return_attrs);
+        plist_t return_attrs = plist_new_array();
+        plist_array_append_item(return_attrs,
+                                plist_new_string("StaticDiskUsage"));
+        plist_array_append_item(return_attrs,
+                                plist_new_string("DynamicDiskUsage"));
+        plist_dict_set_item(client_opts, "ReturnAttributes", return_attrs);
 
-        // auto apps_result = instproxy.browse(client_opts);
-        // if (apps_result.is_ok()) {
-        //     auto apps = std::move(apps_result.unwrap());
-        //     for (const auto &app_info : apps) {
-        //         plist_t static_usage =
-        //             plist_dict_get_item(app_info, "StaticDiskUsage");
-        //         if (static_usage &&
-        //             plist_get_node_type(static_usage) == PLIST_UINT) {
-        //             uint64_t static_size = 0;
-        //             plist_get_uint_val(static_usage, &static_size);
-        //             totalAppsSpace += static_size;
-        //         }
+        auto apps_result = instproxy.browse(client_opts);
+        if (apps_result.is_ok()) {
+            auto apps = std::move(apps_result.unwrap());
+            for (const auto &app_info : apps) {
+                plist_t static_usage =
+                    plist_dict_get_item(app_info, "StaticDiskUsage");
+                if (static_usage &&
+                    plist_get_node_type(static_usage) == PLIST_UINT) {
+                    uint64_t static_size = 0;
+                    plist_get_uint_val(static_usage, &static_size);
+                    totalAppsSpace += static_size;
+                }
 
-        //         plist_t dynamic_usage =
-        //             plist_dict_get_item(app_info, "DynamicDiskUsage");
-        //         if (dynamic_usage &&
-        //             plist_get_node_type(dynamic_usage) == PLIST_UINT) {
-        //             uint64_t dynamic_size = 0;
-        //             plist_get_uint_val(dynamic_usage, &dynamic_size);
-        //             totalAppsSpace += dynamic_size;
-        //         }
-        //     }
-        // }
-        // result["appsUsage"] = QVariant::fromValue(totalAppsSpace);
-        // plist_free(client_opts); // client_opts is consumed by browse, but
+                plist_t dynamic_usage =
+                    plist_dict_get_item(app_info, "DynamicDiskUsage");
+                if (dynamic_usage &&
+                    plist_get_node_type(dynamic_usage) == PLIST_UINT) {
+                    uint64_t dynamic_size = 0;
+                    plist_get_uint_val(dynamic_usage, &dynamic_size);
+                    totalAppsSpace += dynamic_size;
+                }
+            }
+        }
+        result["appsUsage"] = QVariant::fromValue(totalAppsSpace);
+        plist_free(client_opts); // client_opts is consumed by browse, but
 
         // Media usage
-        // uint64_t mediaSpace = 0;
-        // IdeviceFFI::Lockdown lockdown =
-        //     IdeviceFFI::Lockdown::adopt(m_device->lockdown);
-        // auto itunes_info_res =
-        //     lockdown.get_value("com.apple.mobile.iTunes", nullptr);
-        // if (itunes_info_res.is_ok()) {
-        //     auto itunes_dict = std::move(itunes_info_res.unwrap());
-        //     if (itunes_dict) {
-        //         plist_t media_node =
-        //             plist_dict_get_item(itunes_dict, "MediaLibrarySize");
-        //         if (media_node &&
-        //             plist_get_node_type(media_node) == PLIST_UINT) {
-        //             plist_get_uint_val(media_node, &mediaSpace);
-        //         }
-        //     }
-        // }
-        // result["mediaUsage"] = QVariant::fromValue(mediaSpace);
+        uint64_t mediaSpace = 0;
+        plist_t out = nullptr;
+
+        IdeviceFfiError *err = lockdownd_get_value(
+            m_device->lockdown, "com.apple.mobile.iTunes", nullptr, &out);
+        if (!err && out) {
+            plist_t media_node = plist_dict_get_item(out, "MediaLibrarySize");
+            if (media_node && plist_get_node_type(media_node) == PLIST_UINT) {
+                plist_get_uint_val(media_node, &mediaSpace);
+            }
+        }
+        result["mediaUsage"] = QVariant::fromValue(mediaSpace);
 
         return result;
     });
-    // watcher->setFuture(future);
+    watcher->setFuture(future);
 }

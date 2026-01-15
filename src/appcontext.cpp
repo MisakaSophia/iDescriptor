@@ -266,7 +266,6 @@ void AppContext::addDevice(QString udid,
                         .mutex = new std::recursive_mutex(),
                         .imageMounter = initResult->imageMounter,
                         .diagRelay = initResult->diagRelay,
-                        .screenshotrClient = initResult->screenshotrClient,
                         .locationSimulation = initResult->locationSimulation};
                     m_devices[device->udid] = device;
                     if (addType == AddType::Regular) {

@@ -30,7 +30,6 @@ CableInfoWidget::CableInfoWidget(iDescriptorDevice *device, QWidget *parent)
     : QWidget(parent), m_device(device), m_response(nullptr)
 {
     setupUI();
-    initCableInfo();
     connect(AppContext::sharedInstance(), &AppContext::deviceRemoved, this,
             [this](const std::string &udid) {
                 if (m_device->udid == udid) {
@@ -38,12 +37,13 @@ CableInfoWidget::CableInfoWidget(iDescriptorDevice *device, QWidget *parent)
                     this->deleteLater();
                 }
             });
+    QTimer::singleShot(200, this, &CableInfoWidget::initCableInfo);
 }
 
 void CableInfoWidget::setupUI()
 {
     setWindowTitle("Cable Information - iDescriptor");
-    m_mainLayout = new QVBoxLayout(this);
+    m_mainLayout = new QVBoxLayout();
     m_mainLayout->setSpacing(20);
     m_mainLayout->setContentsMargins(20, 20, 20, 20);
 
@@ -58,7 +58,14 @@ void CableInfoWidget::setupUI()
         new QLabel("Please wait while we analyze the connected cable.");
     m_descriptionLabel->setStyleSheet("font-size: 9px;");
 
+    QPushButton *redoButton = new QPushButton("Re-analyze");
+    connect(redoButton, &QPushButton::clicked, this, [this]() {
+        m_loadingWidget->showLoading();
+        QTimer::singleShot(200, this, &CableInfoWidget::initCableInfo);
+    });
     headerLayout->addWidget(m_statusLabel);
+    headerLayout->addStretch();
+    headerLayout->addWidget(redoButton);
 
     m_mainLayout->addLayout(headerLayout);
 
@@ -71,14 +78,38 @@ void CableInfoWidget::setupUI()
     m_mainLayout->addWidget(m_descriptionLabel);
     m_mainLayout->addWidget(m_infoWidget);
     m_mainLayout->addStretch();
+    m_loadingWidget = new ZLoadingWidget(true, this);
+    m_loadingWidget->setupContentWidget(m_mainLayout);
+
+    QVBoxLayout *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->addWidget(m_loadingWidget);
+
+    QVBoxLayout *errorLayout = new QVBoxLayout();
+    m_errorLabel = new QLabel();
+    m_errorLabel->setAlignment(Qt::AlignCenter);
+    errorLayout->addStretch();
+    errorLayout->addWidget(m_errorLabel);
+
+    QPushButton *retryButton = new QPushButton("Retry");
+    retryButton->setMaximumWidth(retryButton->sizeHint().width());
+    connect(retryButton, &QPushButton::clicked, this, [this]() {
+        m_loadingWidget->showLoading();
+        QTimer::singleShot(200, this, &CableInfoWidget::initCableInfo);
+    });
+    errorLayout->addWidget(retryButton, 0, Qt::AlignHCenter);
+    errorLayout->addStretch();
+
+    m_loadingWidget->setupErrorWidget(errorLayout);
 }
 
 void CableInfoWidget::initCableInfo()
 {
     if (!m_device) {
-        m_statusLabel->setText("Something went wrong (no device ?)");
-        m_statusLabel->setStyleSheet(
+        m_errorLabel->setText("Something went wrong (no device ?)");
+        m_errorLabel->setStyleSheet(
             "QLabel { color: #dc3545; font-size: 18px; font-weight: bold; }");
+        m_loadingWidget->showError();
         return;
     }
 
@@ -104,8 +135,7 @@ void CableInfoWidget::analyzeCableInfo()
     if (!ioreg.valid()) {
         return;
     }
-
-    m_cableInfo.isConnected = true;
+    m_cableInfo.isConnected = ioreg["ConnectionActive"].getBool();
 
     // Check if genuine (Apple manufacturer and valid model info)
     m_cableInfo.manufacturer = QString::fromStdString(
@@ -197,6 +227,13 @@ void CableInfoWidget::updateUI()
         delete item;
     }
 
+    if (!m_cableInfo.isConnected) {
+        m_errorLabel->setText(
+            "Device does not seem to be connected to any cable.");
+        m_loadingWidget->showError();
+        return;
+    }
+
     // Update status and icon based on cable type
     QString statusText;
     QString statusStyle;
@@ -204,6 +241,7 @@ void CableInfoWidget::updateUI()
     m_descriptionLabel->setText("Please note that this check may not be "
                                 "absolute guarantee of authenticity.");
     if (m_cableInfo.isGenuine) {
+        // todo: type-c to type-c
         statusText = QString("✅ Genuine %1")
                          .arg(m_cableInfo.isTypeC ? "USB-C to Lightning Cable"
                                                   : "Lightning Cable");
@@ -284,6 +322,7 @@ void CableInfoWidget::updateUI()
         createInfoRow(m_infoLayout, row++, "Supported Transports:",
                       m_cableInfo.supportedTransports.join(", "));
     }
+    m_loadingWidget->stop(true);
 }
 
 void CableInfoWidget::createInfoRow(QGridLayout *layout, int row,

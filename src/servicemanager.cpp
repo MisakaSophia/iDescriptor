@@ -21,12 +21,10 @@
 #include "iDescriptor.h"
 #include <QtConcurrent>
 
-IdeviceFfiError *
-ServiceManager::safeAfcReadDirectory(const iDescriptorDevice *device,
-                                     const char *path, char ***dirs,
-                                     std::optional<AfcClientHandle *> altAfc)
+IdeviceFfiError *ServiceManager::safeAfcReadDirectory(
+    const iDescriptorDevice *device, const char *path, char ***dirs,
+    size_t count, std::optional<AfcClientHandle *> altAfc)
 {
-    size_t count = 0;
     return executeAfcClientOperation(
         device,
         [path, dirs, &count, device](AfcClientHandle *client) {
@@ -121,32 +119,44 @@ ServiceManager::safeAfcFileTell(const iDescriptorDevice *device,
         handle);
 }
 
-QByteArray
-ServiceManager::safeReadAfcFileToByteArray(const iDescriptorDevice *device,
-                                           const char *path)
+QByteArray ServiceManager::safeReadAfcFileToByteArray(
+    const iDescriptorDevice *device, const char *path,
+    std::optional<AfcClientHandle *> altAfc)
 {
-    return executeOperation<QByteArray>(device, [path, device]() -> QByteArray {
-        return read_afc_file_to_byte_array(device, path);
-    });
+    return executeOperation<QByteArray>(
+        device,
+        [path, device]() -> QByteArray {
+            return read_afc_file_to_byte_array(device, path);
+        },
+        altAfc);
 }
 
-AFCFileTree ServiceManager::safeGetFileTree(const iDescriptorDevice *device,
-                                            const std::string &path,
-                                            bool checkDir)
+AFCFileTree
+ServiceManager::safeGetFileTree(const iDescriptorDevice *device,
+                                const std::string &path, bool checkDir,
+                                std::optional<AfcClientHandle *> altAfc)
 {
     return executeOperation<AFCFileTree>(
-        device, [path, device, checkDir]() -> AFCFileTree {
-            return get_file_tree(device, checkDir, path);
-        });
+        device,
+        [path, device, checkDir](AfcClientHandle *afc) -> AFCFileTree {
+            return get_file_tree(device, checkDir, path, afc);
+        },
+        altAfc);
 }
 
 QFuture<AFCFileTree>
 ServiceManager::getFileTreeAsync(const iDescriptorDevice *device,
-                                 const std::string &path, bool checkDir)
+                                 const std::string &path, bool checkDir,
+                                 std::optional<AfcClientHandle *> altAfc)
 {
-    return QtConcurrent::run([device, path, checkDir]() {
-        return get_file_tree(device, checkDir, path);
-    });
+    return executeOperation<QFuture<AFCFileTree>>(
+        device,
+        [device, path, checkDir]() -> QFuture<AFCFileTree> {
+            return QtConcurrent::run([device, path, checkDir]() {
+                return get_file_tree(device, checkDir, path);
+            });
+        },
+        altAfc);
 }
 
 MountedImageInfo
@@ -318,5 +328,53 @@ IdeviceFfiError *ServiceManager::exportFileToPath(
             }
 
             return nullptr; // Success
+        });
+}
+
+IdeviceFfiError *
+ServiceManager::takeScreenshot(const iDescriptorDevice *device,
+                               ScreenshotrClientHandle *screenshotrClient,
+                               ScreenshotData *screenshot)
+{
+    return executeOperation<IdeviceFfiError *>(
+        device, [device, screenshotrClient, screenshot]() -> IdeviceFfiError * {
+            return screenshotr_take_screenshot(screenshotrClient, screenshot);
+        });
+}
+
+// requires iOS 17+
+IdeviceFfiError *ServiceManager::enableDevMode(const iDescriptorDevice *device)
+{
+    return executeOperation<IdeviceFfiError *>(
+        device, [device]() -> IdeviceFfiError * {
+            IdeviceFfiError *err = nullptr;
+            AmfiClientHandle *amfi = nullptr;
+            err = amfi_connect(device->provider, &amfi);
+            if (err == NULL) {
+                // Show developer mode option in settings
+                err = amfi_reveal_developer_mode_option_in_ui(amfi);
+                if (err != NULL) {
+                    return err;
+                }
+                qDebug() << "Developer mode option revealed in UI.";
+                // // Enable developer mode (triggers reboot)
+                err = amfi_accept_developer_mode(amfi);
+                if (err != NULL) {
+                    qDebug() << "Failed to accept developer mode."
+                             << err->message << "Code:" << err->code;
+                    return err;
+                }
+
+                err = amfi_enable_developer_mode(amfi);
+
+                if (err != NULL) {
+                    qDebug() << "Failed to enable developer mode."
+                             << err->message << "Code:" << err->code;
+                    return err;
+                }
+                qDebug() << "Developer mode enabled, device will reboot.";
+                // // After reboot, accept developer mode
+            }
+            return err;
         });
 }

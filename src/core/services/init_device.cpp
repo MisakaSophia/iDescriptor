@@ -390,7 +390,6 @@ init_idescriptor_device(const QString &udid,
     HeartbeatThread *heartbeatThread = nullptr;
     ImageMounterHandle *image_mounter = nullptr;
     DiagnosticsRelayClientHandle *diagnostics_relay = nullptr;
-    ScreenshotrClientHandle *screenshotr_client = nullptr;
     LocationSimulationHandle *location_simulation = nullptr;
     plist_t val = nullptr;
 
@@ -515,13 +514,6 @@ init_idescriptor_device(const QString &udid,
         goto cleanup;
     }
 
-    // err = screenshotr_connect(provider, &screenshotr_client);
-
-    // if (err) {
-    //     qDebug() << "Failed to create Screenshotr client";
-    //     goto cleanup;
-    // }
-
     err = afc2_client_connect(provider, &afc2_client);
     if (err) {
         qDebug() << "Failed to create AFC2 client";
@@ -547,8 +539,9 @@ init_idescriptor_device(const QString &udid,
     result.afcClient = afc_client;
     result.afc2Client = afc2_client;
     result.lockdown = lockdown;
+    // TODO:remove, not really required to get some stuff going so it can be
+    // optional
     result.imageMounter = image_mounter;
-    result.screenshotrClient = screenshotr_client;
     result.diagRelay = std::make_shared<DiagnosticsRelay>(
         DiagnosticsRelay::adopt(diagnostics_relay));
     result.locationSimulation = location_simulation;

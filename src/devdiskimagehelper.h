@@ -66,8 +66,6 @@ private:
     QPushButton *m_retryButton;
     QPushButton *m_cancelButton;
 
-    bool m_isDownloading;
-    bool m_isMounting;
     QString m_downloadingVersion;
 };
 

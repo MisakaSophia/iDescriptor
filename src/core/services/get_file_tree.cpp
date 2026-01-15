@@ -24,7 +24,8 @@
 #include <string.h>
 
 AFCFileTree get_file_tree(const iDescriptorDevice *device, bool checkDir,
-                          const std::string &path)
+                          const std::string &path,
+                          std::optional<AfcClientHandle *> altAfc)
 {
     qDebug() << "Getting file tree for path:" << QString::fromStdString(path);
     AFCFileTree result;
@@ -35,8 +36,8 @@ AFCFileTree get_file_tree(const iDescriptorDevice *device, bool checkDir,
     size_t count = 0;
 
     // Use safe wrapper to read directory
-    IdeviceFfiError *err =
-        ServiceManager::safeAfcReadDirectory(device, path.c_str(), &dirs);
+    IdeviceFfiError *err = ServiceManager::safeAfcReadDirectory(
+        device, path.c_str(), &dirs, count, altAfc);
 
     if (err) {
         qDebug() << "Failed to read directory:" << path.c_str()
@@ -52,7 +53,7 @@ AFCFileTree get_file_tree(const iDescriptorDevice *device, bool checkDir,
 
     // Iterate through directory entries
     for (int i = 0; dirs[i]; i++) {
-        qDebug() << "Found entry:" << dirs[i];
+        // qDebug() << "Found entry:" << dirs[i];
         std::string entryName = dirs[i];
         if (entryName == "." || entryName == "..")
             continue;
@@ -69,8 +70,8 @@ AFCFileTree get_file_tree(const iDescriptorDevice *device, bool checkDir,
 
         // Get file info using safe wrapper
         AfcFileInfo info = {};
-        IdeviceFfiError *info_err =
-            ServiceManager::safeAfcGetFileInfo(device, fullPath.c_str(), &info);
+        IdeviceFfiError *info_err = ServiceManager::safeAfcGetFileInfo(
+            device, fullPath.c_str(), &info, altAfc);
 
         if (info_err) {
             qDebug() << "Failed to get file info for:" << fullPath.c_str()
@@ -80,18 +81,20 @@ AFCFileTree get_file_tree(const iDescriptorDevice *device, bool checkDir,
 
         bool isDir = false;
         if (!info_err) {
-            qDebug() << "Entry:" << entryName.c_str() << "Type:" << info.st_ifmt
-                     << "Size:" << info.size;
+            // qDebug() << "Entry:" << entryName.c_str() << "Type:" <<
+            // info.st_ifmt
+            //          << "Size:" << info.size;
             if (strcmp(info.st_ifmt, "S_IFDIR") == 0) {
                 isDir = true;
             } else if (strcmp(info.st_ifmt, "S_IFLNK") == 0) {
                 // Check if symlink points to a directory
                 char **dir_contents = nullptr;
+                size_t count = 0;
                 // FIXME: recursively call safeAfcGetFileInfo to figure out if
                 // it's a dir
                 IdeviceFfiError *link_err =
                     ServiceManager::safeAfcReadDirectory(
-                        device, fullPath.c_str(), &dir_contents);
+                        device, fullPath.c_str(), &dir_contents, count, altAfc);
 
                 if (!link_err) {
                     isDir = true;

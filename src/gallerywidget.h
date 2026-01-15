@@ -77,9 +77,7 @@ private:
     // UI components
     QVBoxLayout *m_mainLayout;
     QHBoxLayout *m_controlsLayout;
-    QStackedWidget *m_stackedWidget;
     ZLoadingWidget *m_loadingWidget;
-    QWidget *m_errorWidget;
     QPushButton *m_retryButton;
     QPushButton *m_importButton;
     // Album selection view

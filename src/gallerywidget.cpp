@@ -52,18 +52,14 @@
 
 GalleryWidget::GalleryWidget(iDescriptorDevice *device, QWidget *parent)
     : QWidget{parent}, m_device(device), m_model(nullptr),
-      m_stackedWidget(nullptr), m_albumSelectionWidget(nullptr),
-      m_albumListView(nullptr), m_photoGalleryWidget(nullptr),
-      m_listView(nullptr), m_backButton(nullptr)
+      m_albumSelectionWidget(nullptr), m_albumListView(nullptr),
+      m_photoGalleryWidget(nullptr), m_listView(nullptr), m_backButton(nullptr)
 {
     m_mainLayout = new QVBoxLayout(this);
     m_mainLayout->setContentsMargins(0, 0, 0, 0);
-
-    // Setup controls at the top (outside of stacked widget)
+    m_loadingWidget = new ZLoadingWidget(true, this);
     setupControlsLayout();
-
-    // Create stacked widget for different views
-    m_stackedWidget = new QStackedWidget(this);
+    m_mainLayout->addWidget(m_loadingWidget);
 
     // Setup album selection view
     setupAlbumSelectionView();
@@ -72,11 +68,7 @@ GalleryWidget::GalleryWidget(iDescriptorDevice *device, QWidget *parent)
     setupPhotoGalleryView();
 
     // Add stacked widget to main layout
-    m_mainLayout->addWidget(m_stackedWidget);
     setLayout(m_mainLayout);
-    m_loadingWidget = new ZLoadingWidget(true, this);
-    m_stackedWidget->addWidget(m_loadingWidget);
-    m_stackedWidget->setCurrentWidget(m_loadingWidget);
 
     QVBoxLayout *errorLayout = new QVBoxLayout();
     errorLayout->setAlignment(Qt::AlignCenter);
@@ -84,16 +76,13 @@ GalleryWidget::GalleryWidget(iDescriptorDevice *device, QWidget *parent)
     errorLabel->setStyleSheet("font-weight: bold; color: red;");
     errorLayout->addWidget(errorLabel);
     m_retryButton = new QPushButton("Retry", this);
+    errorLayout->addWidget(m_retryButton, 0, Qt::AlignCenter);
+    m_loadingWidget->setupErrorWidget(errorLayout);
     connect(m_retryButton, &QPushButton::clicked, this, [this]() {
-        m_stackedWidget->setCurrentWidget(m_loadingWidget);
+        m_loadingWidget->showLoading();
         QTimer::singleShot(100, this, &GalleryWidget::reload);
     });
-    errorLayout->addWidget(m_retryButton, 0, Qt::AlignCenter);
-    m_errorWidget = new QWidget();
-    m_errorWidget->setLayout(errorLayout);
 
-    m_stackedWidget->addWidget(m_errorWidget);
-    m_stackedWidget->setCurrentWidget(m_loadingWidget);
     setControlsEnabled(false); // Disable controls until album is selected
 }
 
@@ -374,7 +363,7 @@ void GalleryWidget::setupAlbumSelectionView()
 
     layout->addWidget(m_albumListView);
 
-    m_stackedWidget->addWidget(m_albumSelectionWidget);
+    m_loadingWidget->setupContentWidget(m_albumSelectionWidget);
 
     connect(m_albumListView, &QListView::doubleClicked, this,
             [this](const QModelIndex &index) {
@@ -417,7 +406,7 @@ void GalleryWidget::setupPhotoGalleryView()
     layout->addWidget(m_listView);
 
     // Add the photo gallery widget to stacked widget
-    m_stackedWidget->addWidget(m_photoGalleryWidget);
+    m_loadingWidget->setupAditionalWidget(m_photoGalleryWidget);
 
     // Connect double-click to open preview dialog
     connect(m_listView, &QListView::doubleClicked, this,
@@ -445,7 +434,7 @@ void GalleryWidget::loadAlbumList(const AFCFileTree &dcimTree)
 {
     if (!dcimTree.success) {
         qDebug() << "Failed to read DCIM directory";
-        m_stackedWidget->setCurrentWidget(m_errorWidget);
+        m_loadingWidget->showError();
         QMessageBox::warning(this, "Error",
                              "Could not access DCIM directory on device.");
         return;
@@ -480,7 +469,8 @@ void GalleryWidget::loadAlbumList(const AFCFileTree &dcimTree)
     }
 
     m_albumListView->setModel(albumModel);
-    m_stackedWidget->setCurrentWidget(m_albumSelectionWidget);
+    m_loadingWidget->stop();
+    m_loadingWidget->switchToWidget(m_albumSelectionWidget);
 }
 
 void GalleryWidget::onAlbumSelected(const QString &albumPath)
@@ -507,8 +497,7 @@ void GalleryWidget::onAlbumSelected(const QString &albumPath)
     m_model->setAlbumPath(albumPath);
 
     // Switch to photo gallery view
-    m_stackedWidget->setCurrentWidget(m_photoGalleryWidget);
-
+    m_loadingWidget->switchToWidget(m_photoGalleryWidget);
     // Enable controls and show back button
     setControlsEnabled(true);
     m_backButton->show();
@@ -522,7 +511,8 @@ void GalleryWidget::onBackToAlbums()
     }
 
     // Switch back to album selection view
-    m_stackedWidget->setCurrentWidget(m_albumSelectionWidget);
+    m_loadingWidget->switchToWidget(m_albumSelectionWidget);
+
     if (m_model) {
         m_model->clear();
     }

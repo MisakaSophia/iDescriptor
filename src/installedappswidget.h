@@ -49,7 +49,8 @@ class AppTabWidget : public QGroupBox
 
 public:
     AppTabWidget(const QString &appName, const QString &bundleId,
-                 const QString &version, QWidget *parent = nullptr);
+                 const QString &version, const QPixmap &icon = QPixmap(),
+                 QWidget *parent = nullptr);
 
     void setSelected(bool selected);
     bool isSelected() const { return m_selected; }
@@ -66,7 +67,6 @@ protected:
     void mousePressEvent(QMouseEvent *event) override;
 
 private:
-    void fetchAppIcon();
     void setupUI();
 
     QString m_appName;
@@ -105,7 +105,7 @@ private:
     void createRightPanel();
     void fetchInstalledApps();
     void createAppTab(const QString &appName, const QString &bundleId,
-                      const QString &version);
+                      const QString &version, const QPixmap &icon = QPixmap());
     void showLoadingState();
     void showErrorState(const QString &error);
     void selectAppTab(AppTabWidget *tab);
@@ -132,8 +132,8 @@ private:
     QFutureWatcher<QVariantMap> *m_watcher;
     QFutureWatcher<QVariantMap> *m_containerWatcher;
     QSplitter *m_splitter;
-    // house_arrest_client_t m_houseArrestClient = nullptr;
-    // afc_client_t m_houseArrestAfcClient = nullptr;
+    HouseArrestClientHandle *m_houseArrestClient = nullptr;
+    AfcClientHandle *m_houseArrestAfcClient = nullptr;
     // App data storage
     QList<AppTabWidget *> m_appTabs;
     AppTabWidget *m_selectedTab = nullptr;

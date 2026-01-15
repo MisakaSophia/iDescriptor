@@ -69,6 +69,7 @@
 
 #define DeviceLockedMountErrorCode -21
 #define NotFoundErrorCode -14
+#define ServiceNotFoundErrorCode -15
 #define DISK_IMAGE_TYPE_DEVELOPER "Developer"
 
 #define HEARTBEAT_RETRY_LIMIT 2
@@ -217,7 +218,6 @@ struct iDescriptorDevice {
     std::recursive_mutex *mutex;
     ImageMounterHandle *imageMounter;
     std::shared_ptr<DiagnosticsRelay> diagRelay;
-    ScreenshotrClientHandle *screenshotrClient;
     LocationSimulationHandle *locationSimulation;
 };
 
@@ -231,7 +231,6 @@ struct iDescriptorInitDeviceResult {
     LockdowndClientHandle *lockdown;
     ImageMounterHandle *imageMounter;
     std::shared_ptr<DiagnosticsRelay> diagRelay;
-    ScreenshotrClientHandle *screenshotrClient;
     LocationSimulationHandle *locationSimulation;
 };
 // #ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
@@ -414,8 +413,10 @@ struct AFCFileTree {
     std::string currentPath;
 };
 
-AFCFileTree get_file_tree(const iDescriptorDevice *device, bool checkDir,
-                          const std::string &path = "/");
+AFCFileTree
+get_file_tree(const iDescriptorDevice *device, bool checkDir,
+              const std::string &path = "/",
+              std::optional<AfcClientHandle *> altAfc = std::nullopt);
 
 bool detect_jailbroken(AfcClientHandle *afc);
 
@@ -437,8 +438,6 @@ init_idescriptor_device(const QString &udid,
 // bool set_location(idevice_t device, char *lat, char *lon);
 
 // bool shutdown(idevice_t device);
-
-// TakeScreenshotResult take_screenshot(screenshotr_client_t shotr);
 
 IdeviceFfiError *mount_dev_image(const iDescriptorDevice *device,
                                  const char *image_file,

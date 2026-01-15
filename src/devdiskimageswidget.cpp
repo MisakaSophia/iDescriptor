@@ -606,17 +606,11 @@ void DevDiskImagesWidget::mountImage(const QString &version)
                                      .arg(m_deviceComboBox->currentText()));
         return updateUI();
     } else if (info.err->code == DeviceLockedMountErrorCode) {
-        QMessageBox::critical(this, "Device Locked",
-                              "The device is locked. Please unlock it and try"
-                              " again.");
-        mounted_image_info_free(info);
-        return updateUI();
+        /* Never returns DeviceLockedMountErrorCode when doing
+         image_mounter_lookup_image but maybe used in future */
     } else if (info.err->code == NotFoundErrorCode) {
-        QMessageBox::critical(
-            this, "No Mounted Image",
-            "No developer disk image is mounted on the device.");
-        mounted_image_info_free(info);
-        return updateUI();
+        // OK, no image mounted
+        qDebug() << "Mount image: no  mounted image found";
     } else {
         QMessageBox::critical(
             this, "Mount Check Failed",
@@ -696,10 +690,6 @@ void DevDiskImagesWidget::closeEvent(QCloseEvent *event)
 
     event->accept();
 }
-
-// Toolbox clicked: "Developer Disk Images"
-// terminate called after throwing an instance of 'std::logic_error'
-//   what():  basic_string: construction from null is not valid
 
 void DevDiskImagesWidget::checkMountedImage()
 {

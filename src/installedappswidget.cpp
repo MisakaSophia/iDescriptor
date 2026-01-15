@@ -22,6 +22,7 @@
 #include "iDescriptor-ui.h"
 #include "iDescriptor.h"
 #include "qprocessindicator.h"
+#include "servicemanager.h"
 #include "zlineedit.h"
 #include <QAction>
 #include <QApplication>
@@ -36,7 +37,8 @@
 #include <QtConcurrent/QtConcurrent>
 
 AppTabWidget::AppTabWidget(const QString &appName, const QString &bundleId,
-                           const QString &version, QWidget *parent)
+                           const QString &version, const QPixmap &icon,
+                           QWidget *parent)
     : QGroupBox(parent), m_appName(appName), m_bundleId(bundleId),
       m_version(version), m_selected(false)
 {
@@ -45,31 +47,7 @@ AppTabWidget::AppTabWidget(const QString &appName, const QString &bundleId,
     setCursor(Qt::PointingHandCursor);
 
     setupUI();
-    fetchAppIcon();
-}
-
-void AppTabWidget::fetchAppIcon()
-{
-    ::fetchAppIconFromApple(
-        m_networkManager, m_bundleId, [this](const QPixmap &pixmap) {
-            if (!pixmap.isNull()) {
-                QPixmap scaled =
-                    pixmap.scaled(32, 32, Qt::KeepAspectRatioByExpanding,
-                                  Qt::SmoothTransformation);
-                QPixmap rounded(32, 32);
-                rounded.fill(Qt::transparent);
-
-                QPainter painter(&rounded);
-                painter.setRenderHint(QPainter::Antialiasing);
-                QPainterPath path;
-                path.addRoundedRect(QRectF(0, 0, 32, 32), 8, 8);
-                painter.setClipPath(path);
-                painter.drawPixmap(0, 0, scaled);
-                painter.end();
-
-                m_iconLabel->setPixmap(rounded);
-            }
-        });
+    m_iconLabel->setPixmap(icon);
 }
 
 void AppTabWidget::setSelected(bool selected)
@@ -290,177 +268,132 @@ void InstalledAppsWidget::fetchInstalledApps()
         showErrorState("Invalid device");
         return;
     }
+    // todo maybe clear m_watcher ?
+    QFuture<QVariantMap> future = QtConcurrent::run([this]() -> QVariantMap {
+        QVariantMap result;
+        QVariantList apps;
 
-    // QFuture<QVariantMap> future = QtConcurrent::run([this]() -> QVariantMap {
-    //     QVariantMap result;
-    //     QVariantList apps;
+        try {
+            InstallationProxyClientHandle *installationProxyClientHandle =
+                nullptr;
+            installation_proxy_connect(m_device->provider,
+                                       &installationProxyClientHandle);
+            auto instproxy = IdeviceFFI::InstallationProxy::adopt(
+                installationProxyClientHandle);
 
-    //     // result["success"] = true;
-    //     // result["apps"] = apps;
-    //     // return result;
+            // Get both User and System apps
+            QStringList appTypes = {"User", "System"};
 
-    //     instproxy_client_t instproxy = nullptr;
-    //     lockdownd_client_t lockdownClient = nullptr;
-    //     lockdownd_service_descriptor_t lockdowndService = nullptr;
+            for (const QString &appType : appTypes) {
+                plist_t client_opts = plist_new_dict();
+                plist_dict_set_item(
+                    client_opts, "ApplicationType",
+                    plist_new_string(appType.toUtf8().constData()));
 
-    //     try {
-    //         if (lockdownd_client_new_with_handshake(
-    //                 m_device->device, &lockdownClient, APP_LABEL) !=
-    //             LOCKDOWN_E_SUCCESS) {
-    //             result["error"] = "Could not connect to lockdown service";
-    //             return result;
-    //         }
+                plist_t return_attrs = plist_new_array();
+                plist_array_append_item(return_attrs,
+                                        plist_new_string("CFBundleIdentifier"));
+                plist_array_append_item(
+                    return_attrs, plist_new_string("CFBundleDisplayName"));
+                plist_array_append_item(
+                    return_attrs,
+                    plist_new_string("CFBundleShortVersionString"));
+                plist_array_append_item(return_attrs,
+                                        plist_new_string("CFBundleVersion"));
+                plist_array_append_item(
+                    return_attrs, plist_new_string("UIFileSharingEnabled"));
 
-    //         if (lockdownd_start_service(
-    //                 lockdownClient, "com.apple.mobile.installation_proxy",
-    //                 &lockdowndService) != LOCKDOWN_E_SUCCESS) {
-    //             result["error"] = "Could not start installation proxy
-    //             service"; lockdownd_client_free(lockdownClient); return
-    //             result;
-    //         }
+                plist_dict_set_item(client_opts, "ReturnAttributes",
+                                    return_attrs);
 
-    //         if (instproxy_client_new(m_device->device, lockdowndService,
-    //                                  &instproxy) != INSTPROXY_E_SUCCESS) {
-    //             result["error"] = "Could not connect to installation proxy";
-    //             lockdownd_service_descriptor_free(lockdowndService);
-    //             lockdownd_client_free(lockdownClient);
-    //             return result;
-    //         }
+                auto installedApps = instproxy.browse(client_opts);
+                if (installedApps.is_ok()) {
+                    plist_t apps_plist;
+                    installedApps.unwrap();
 
-    //         lockdownd_service_descriptor_free(lockdowndService);
-    //         lockdowndService = nullptr;
+                    // if (plist_get_node_type(apps_plist) == PLIST_ARRAY) {
+                    for (const auto &app_info : installedApps.unwrap()) {
+                        if (!app_info)
+                            continue;
 
-    //         // Get both User and System apps
-    //         QStringList appTypes = {"User", "System"};
+                        QVariantMap appData;
 
-    //         for (const QString &appType : appTypes) {
-    //             plist_t client_opts = plist_new_dict();
-    //             plist_dict_set_item(
-    //                 client_opts, "ApplicationType",
-    //                 plist_new_string(appType.toUtf8().constData()));
+                        // Get bundle identifier
+                        plist_t bundle_id =
+                            plist_dict_get_item(app_info, "CFBundleIdentifier");
+                        if (bundle_id &&
+                            plist_get_node_type(bundle_id) == PLIST_STRING) {
+                            char *bundle_id_str = nullptr;
+                            plist_get_string_val(bundle_id, &bundle_id_str);
+                            if (bundle_id_str) {
+                                appData["bundleId"] = QString(bundle_id_str);
+                                free(bundle_id_str);
+                            }
+                        }
 
-    //             plist_t return_attrs = plist_new_array();
-    //             plist_array_append_item(return_attrs,
-    //                                     plist_new_string("CFBundleIdentifier"));
-    //             plist_array_append_item(
-    //                 return_attrs, plist_new_string("CFBundleDisplayName"));
-    //             plist_array_append_item(
-    //                 return_attrs,
-    //                 plist_new_string("CFBundleShortVersionString"));
-    //             plist_array_append_item(return_attrs,
-    //                                     plist_new_string("CFBundleVersion"));
-    //             plist_array_append_item(
-    //                 return_attrs, plist_new_string("UIFileSharingEnabled"));
+                        // Get display name
+                        plist_t display_name = plist_dict_get_item(
+                            app_info, "CFBundleDisplayName");
+                        if (display_name &&
+                            plist_get_node_type(display_name) == PLIST_STRING) {
+                            char *display_name_str = nullptr;
+                            plist_get_string_val(display_name,
+                                                 &display_name_str);
+                            if (display_name_str) {
+                                appData["displayName"] =
+                                    QString(display_name_str);
+                                free(display_name_str);
+                            }
+                        }
 
-    //             plist_dict_set_item(client_opts, "ReturnAttributes",
-    //                                 return_attrs);
+                        // Get version
+                        plist_t version = plist_dict_get_item(
+                            app_info, "CFBundleShortVersionString");
+                        if (version &&
+                            plist_get_node_type(version) == PLIST_STRING) {
+                            char *version_str = nullptr;
+                            plist_get_string_val(version, &version_str);
+                            if (version_str) {
+                                appData["version"] = QString(version_str);
+                                free(version_str);
+                            }
+                        }
 
-    //             plist_t apps_plist = nullptr;
-    //             if (instproxy_browse(instproxy, client_opts, &apps_plist) ==
-    //                     INSTPROXY_E_SUCCESS &&
-    //                 apps_plist) {
-    //                 if (plist_get_node_type(apps_plist) == PLIST_ARRAY) {
-    //                     for (uint32_t i = 0;
-    //                          i < plist_array_get_size(apps_plist); i++) {
-    //                         plist_t app_info =
-    //                             plist_array_get_item(apps_plist, i);
-    //                         if (!app_info)
-    //                             continue;
+                        // Get file sharing enabled status
+                        plist_t file_sharing = plist_dict_get_item(
+                            app_info, "UIFileSharingEnabled");
+                        if (file_sharing && plist_get_node_type(file_sharing) ==
+                                                PLIST_BOOLEAN) {
+                            uint8_t file_sharing_enabled = 0;
+                            plist_get_bool_val(file_sharing,
+                                               &file_sharing_enabled);
+                            appData["fileSharingEnabled"] =
+                                (file_sharing_enabled != 0);
+                        } else {
+                            appData["fileSharingEnabled"] = false;
+                        }
 
-    //                         QVariantMap appData;
+                        appData["type"] = appType;
 
-    //                         // Get bundle identifier
-    //                         plist_t bundle_id = plist_dict_get_item(
-    //                             app_info, "CFBundleIdentifier");
-    //                         if (bundle_id && plist_get_node_type(bundle_id)
-    //                         ==
-    //                                              PLIST_STRING) {
-    //                             char *bundle_id_str = nullptr;
-    //                             plist_get_string_val(bundle_id,
-    //                             &bundle_id_str); if (bundle_id_str) {
-    //                                 appData["bundleId"] =
-    //                                     QString(bundle_id_str);
-    //                                 free(bundle_id_str);
-    //                             }
-    //                         }
+                        if (!appData["bundleId"].toString().isEmpty()) {
+                            apps.append(appData);
+                        }
+                    }
 
-    //                         // Get display name
-    //                         plist_t display_name = plist_dict_get_item(
-    //                             app_info, "CFBundleDisplayName");
-    //                         if (display_name &&
-    //                             plist_get_node_type(display_name) ==
-    //                                 PLIST_STRING) {
-    //                             char *display_name_str = nullptr;
-    //                             plist_get_string_val(display_name,
-    //                                                  &display_name_str);
-    //                             if (display_name_str) {
-    //                                 appData["displayName"] =
-    //                                     QString(display_name_str);
-    //                                 free(display_name_str);
-    //                             }
-    //                         }
+                    plist_free(apps_plist);
+                }
+                plist_free(client_opts);
+            }
+            result["apps"] = apps;
+            result["success"] = true;
+        } catch (const std::exception &e) {
+            result["error"] = QString("Exception: %1").arg(e.what());
+        }
 
-    //                         // Get version
-    //                         plist_t version = plist_dict_get_item(
-    //                             app_info, "CFBundleShortVersionString");
-    //                         if (version &&
-    //                             plist_get_node_type(version) == PLIST_STRING)
-    //                             { char *version_str = nullptr;
-    //                             plist_get_string_val(version, &version_str);
-    //                             if (version_str) {
-    //                                 appData["version"] =
-    //                                 QString(version_str); free(version_str);
-    //                             }
-    //                         }
+        return result;
+    });
 
-    //                         // Get file sharing enabled status
-    //                         plist_t file_sharing = plist_dict_get_item(
-    //                             app_info, "UIFileSharingEnabled");
-    //                         if (file_sharing &&
-    //                             plist_get_node_type(file_sharing) ==
-    //                                 PLIST_BOOLEAN) {
-    //                             uint8_t file_sharing_enabled = 0;
-    //                             plist_get_bool_val(file_sharing,
-    //                                                &file_sharing_enabled);
-    //                             appData["fileSharingEnabled"] =
-    //                                 (file_sharing_enabled != 0);
-    //                         } else {
-    //                             appData["fileSharingEnabled"] = false;
-    //                         }
-
-    //                         appData["type"] = appType;
-
-    //                         if (!appData["bundleId"].toString().isEmpty()) {
-    //                             apps.append(appData);
-    //                         }
-    //                     }
-    //                 }
-    //                 plist_free(apps_plist);
-    //             }
-    //             plist_free(client_opts);
-    //         }
-
-    //         instproxy_client_free(instproxy);
-    //         lockdownd_client_free(lockdownClient);
-
-    //         result["apps"] = apps;
-    //         result["success"] = true;
-
-    //     } catch (const std::exception &e) {
-    //         if (instproxy)
-    //             instproxy_client_free(instproxy);
-    //         if (lockdownClient)
-    //             lockdownd_client_free(lockdownClient);
-    //         if (lockdowndService)
-    //             lockdownd_service_descriptor_free(lockdowndService);
-
-    //         result["error"] = QString("Exception: %1").arg(e.what());
-    //     }
-
-    //     return result;
-    // });
-
-    // m_watcher->setFuture(future);
+    m_watcher->setFuture(future);
 }
 
 void InstalledAppsWidget::onAppsDataReady()
@@ -498,6 +431,18 @@ void InstalledAppsWidget::onAppsDataReady()
     m_appTabs.clear();
     m_selectedTab = nullptr;
 
+    // fetch icon from springboard service
+    SpringBoardServicesClientHandle *springboardClient = nullptr;
+    IdeviceFfiError *err = nullptr;
+    err = springboard_services_connect(m_device->provider, &springboardClient);
+
+    if (err != nullptr) {
+        qDebug() << "Error connecting to SpringBoard services:"
+                 << QString::fromUtf8(err->message);
+    } else {
+        qDebug() << "Successfully connected to SpringBoard services.";
+    }
+
     // Create tabs for each app
     for (const QVariant &appVariant : apps) {
         QVariantMap appData = appVariant.toMap();
@@ -523,24 +468,41 @@ void InstalledAppsWidget::onAppsDataReady()
             tabName += " (System)";
         }
 
-        createAppTab(tabName, bundleId, version);
-    }
+        if (springboardClient) {
+            void *out_result;
+            size_t out_result_len;
 
-    // m_contentLabel->setText(
-    //     QString("Found %1 installed apps").arg(apps.count()));
+            err = springboard_services_get_icon(springboardClient,
+                                                bundleId.toUtf8().constData(),
+                                                &out_result, &out_result_len);
+            if (err != nullptr) {
+                qWarning() << "Error getting icon for" << bundleId << ":"
+                           << QString::fromUtf8(err->message);
+                createAppTab(tabName, bundleId, version);
+            } else {
+                QByteArray byteArray(reinterpret_cast<const char *>(out_result),
+                                     static_cast<int>(out_result_len));
+                QImage image;
+                image.loadFromData(byteArray);
+                QPixmap pixmap = QPixmap::fromImage(image);
+                createAppTab(tabName, bundleId, version, pixmap);
+            }
+        }
 
-    // Select first tab if available
-    if (!m_appTabs.isEmpty()) {
-        selectAppTab(m_appTabs.first());
+        // Select first tab if available
+        if (!m_appTabs.isEmpty()) {
+            selectAppTab(m_appTabs.first());
+        }
     }
 }
 
 void InstalledAppsWidget::createAppTab(const QString &appName,
                                        const QString &bundleId,
-                                       const QString &version)
+                                       const QString &version,
+                                       const QPixmap &icon)
 {
     AppTabWidget *tabWidget =
-        new AppTabWidget(appName, bundleId, version, this);
+        new AppTabWidget(appName, bundleId, version, icon, this);
     connect(tabWidget, &AppTabWidget::clicked, this,
             &InstalledAppsWidget::onAppTabClicked);
 
@@ -575,6 +537,7 @@ void InstalledAppsWidget::selectAppTab(AppTabWidget *tab)
     QString bundleId = tab->getBundleId();
 
     // Load app container data
+    // FIXME: handle quickly repeated selections
     loadAppContainer(bundleId);
 }
 
@@ -635,188 +598,138 @@ void InstalledAppsWidget::loadAppContainer(const QString &bundleId)
 
     m_containerLayout->addWidget(loadingWidget);
 
-    // QFuture<QVariantMap> future = QtConcurrent::run([this, bundleId]()
-    //                                                     -> QVariantMap {
-    //     QVariantMap result;
+    QFuture<QVariantMap> future =
+        QtConcurrent::run([this, bundleId]() -> QVariantMap {
+            QVariantMap result;
+            IdeviceFfiError *err = nullptr;
+            HouseArrestClientHandle *houseArrestClient = nullptr;
+            AfcClientHandle *afcClient = nullptr;
 
-    //     afc_client_t afcClient = nullptr;
-    //     lockdownd_client_t lockdownClient = nullptr;
-    //     lockdownd_service_descriptor_t lockdowndService = nullptr;
-    //     house_arrest_client_t houseArrestClient = nullptr;
-    //     try {
-    //         if (lockdownd_client_new_with_handshake(
-    //                 m_device->device, &lockdownClient, APP_LABEL) !=
-    //             LOCKDOWN_E_SUCCESS) {
-    //             result["error"] = "Could not connect to lockdown service";
-    //             return result;
-    //         }
+            try {
+                err = house_arrest_client_connect(m_device->provider,
+                                                  &houseArrestClient);
 
-    //         if (lockdownd_start_service(
-    //                 lockdownClient, "com.apple.mobile.house_arrest",
-    //                 &lockdowndService) != LOCKDOWN_E_SUCCESS) {
-    //             result["error"] = "Could not start house arrest service";
-    //             lockdownd_client_free(lockdownClient);
-    //             return result;
-    //         }
+                if (err != nullptr) {
+                    qDebug()
+                        << "Error connecting to House Arrest for" << bundleId
+                        << ":" << QString::fromUtf8(err->message);
+                    result["error"] =
+                        QString("Error connecting to House Arrest: %1")
+                            .arg(QString::fromUtf8(err->message));
+                    return result;
+                }
 
-    //         if (house_arrest_client_new(m_device->device, lockdowndService,
-    //                                     &houseArrestClient) !=
-    //             HOUSE_ARREST_E_SUCCESS) {
-    //             result["error"] = "Could not connect to house arrest";
-    //             lockdownd_service_descriptor_free(lockdowndService);
-    //             lockdownd_client_free(lockdownClient);
-    //             return result;
-    //         }
+                err = house_arrest_vend_documents(houseArrestClient,
+                                                  bundleId.toUtf8().constData(),
+                                                  &afcClient);
+                if (err != nullptr) {
+                    qDebug() << "Error vending documents for" << bundleId << ":"
+                             << QString::fromUtf8(err->message);
+                    result["error"] = QString("Error vending documents: %1")
+                                          .arg(QString::fromUtf8(err->message));
+                    house_arrest_client_free(houseArrestClient);
+                    return result;
+                }
 
-    //         lockdownd_service_descriptor_free(lockdowndService);
-    //         lockdowndService = nullptr;
+                char **dirs = nullptr;
+                size_t count = 0;
 
-    //         // Send vendor container command
-    //         if (house_arrest_send_command(
-    //                 houseArrestClient, "VendDocuments",
-    //                 // if (house_arrest_send_command(houseArrestClient,
-    //                 // "VendDocuments",
-    //                 bundleId.toUtf8().constData()) != HOUSE_ARREST_E_SUCCESS)
-    //                 {
-    //             result["error"] = "Could not send VendDocuments command";
-    //             house_arrest_client_free(houseArrestClient);
-    //             lockdownd_client_free(lockdownClient);
-    //             return result;
-    //         }
+                // // Use safe wrapper to read directory
+                // IdeviceFfiError *err = ServiceManager::safeAfcReadDirectory(
+                //     m_device, "/Documents", &dirs, count, afcClient);
 
-    //         // Get result
-    //         plist_t dict = nullptr;
-    //         if (house_arrest_get_result(houseArrestClient, &dict) !=
-    //                 HOUSE_ARREST_E_SUCCESS ||
-    //             !dict) {
-    //             result["error"] = "App container not available for this app";
-    //             house_arrest_client_free(houseArrestClient);
-    //             lockdownd_client_free(lockdownClient);
-    //             return result;
-    //         }
+                // if (err != nullptr) {
+                //     qDebug() << "Error reading Documents dir:"
+                //              << QString::fromUtf8(err->message);
+                //     result["error"] = QString("Error reading Documents dir:
+                //     %1")
+                //                           .arg(QString::fromUtf8(err->message));
+                //     if (afcClient)
+                //         afc_client_free(afcClient);
+                //     if (houseArrestClient)
+                //         house_arrest_client_free(houseArrestClient);
+                //     return result;
+                // }
 
-    //         // Check for error in response
-    //         plist_t error_node = plist_dict_get_item(dict, "Error");
-    //         if (error_node) {
-    //             char *error_str = nullptr;
-    //             plist_get_string_val(error_node, &error_str);
-    //             if (error_str) {
-    //                 result["error"] =
-    //                     QString("Container access denied:
-    //                     %1").arg(error_str);
-    //                 free(error_str);
-    //             } else {
-    //                 result["error"] = "Container access denied";
-    //             }
-    //             plist_free(dict);
-    //             house_arrest_client_free(houseArrestClient);
-    //             lockdownd_client_free(lockdownClient);
-    //             return result;
-    //         }
+                // QStringList files;
+                // if (dirs) {
+                //     for (int i = 0; dirs[i]; i++) {
+                //         QString fileName = QString::fromUtf8(dirs[i]);
+                //         if (fileName != "." && fileName != "..") {
+                //             qDebug() << "Found file:" << fileName;
+                //             files.append(fileName);
+                //         }
+                //     }
+                // }
 
-    //         plist_free(dict);
+                // free_directory_listing(dirs, count);
+                // qDebug() << "Total files found:" << files.size();
+                // result["files"] = files;
+                result["afcClient"] =
+                    QVariant::fromValue(reinterpret_cast<void *>(afcClient));
+                result["houseArrestClient"] = QVariant::fromValue(
+                    reinterpret_cast<void *>(houseArrestClient));
+                result["success"] = true;
 
-    //         // Get AFC client for file access
-    //         if (afc_client_new_from_house_arrest_client(
-    //                 houseArrestClient, &afcClient) != AFC_E_SUCCESS) {
-    //             result["error"] =
-    //                 "Could not create AFC client for app container";
-    //             house_arrest_client_free(houseArrestClient);
-    //             lockdownd_client_free(lockdownClient);
-    //             return result;
-    //         }
+            } catch (const std::exception &e) {
+                qDebug() << "Exception while loading app container:"
+                         << e.what();
+                if (afcClient)
+                    afc_client_free(afcClient);
+                if (houseArrestClient)
+                    house_arrest_client_free(houseArrestClient);
 
-    //         // List root directory contents
-    //         char **list = nullptr;
-    //         if (afc_read_directory(afcClient, "/Documents", &list) !=
-    //             AFC_E_SUCCESS) {
-    //             result["error"] = "Could not read app container directory";
-    //             afc_client_free(afcClient);
-    //             house_arrest_client_free(houseArrestClient);
-    //             lockdownd_client_free(lockdownClient);
-    //             return result;
-    //         }
+                result["error"] = QString("Exception: %1").arg(e.what());
+            }
 
-    //         QStringList files;
-    //         if (list) {
-    //             for (int i = 0; list[i]; i++) {
-    //                 QString fileName = QString::fromUtf8(list[i]);
-    //                 if (fileName != "." && fileName != "..") {
-    //                     qDebug() << "Found file:" << fileName;
-    //                     files.append(fileName);
-    //                 }
-    //             }
-    //             afc_dictionary_free(list);
-    //         }
-    //         result["files"] = files;
-    //         result["afcClient"] =
-    //             QVariant::fromValue(reinterpret_cast<void *>(afcClient));
-    //         result["houseArrestClient"] = QVariant::fromValue(
-    //             reinterpret_cast<void *>(houseArrestClient));
-    //         result["success"] = true;
+            return result;
+        });
 
-    //         lockdownd_client_free(lockdownClient);
-
-    //     } catch (const std::exception &e) {
-    //         if (afcClient)
-    //             afc_client_free(afcClient);
-    //         if (houseArrestClient)
-    //             house_arrest_client_free(houseArrestClient);
-    //         if (lockdownClient)
-    //             lockdownd_client_free(lockdownClient);
-    //         if (lockdowndService)
-    //             lockdownd_service_descriptor_free(lockdowndService);
-
-    //         result["error"] = QString("Exception: %1").arg(e.what());
-    //     }
-
-    //     return result;
-    // });
-
-    // m_containerWatcher->setFuture(future);
+    m_containerWatcher->setFuture(future);
 }
 
 void InstalledAppsWidget::onContainerDataReady()
 {
     QVariantMap result = m_containerWatcher->result();
 
-    // // todo
-    // // Clear loading state
-    // QLayoutItem *item;
-    // while ((item = m_containerLayout->takeAt(0)) != nullptr) {
-    //     if (item->widget()) {
-    //         item->widget()->deleteLater();
-    //     }
-    //     delete item;
-    // }
+    // todo
+    // Clear loading state
+    QLayoutItem *item;
+    while ((item = m_containerLayout->takeAt(0)) != nullptr) {
+        if (item->widget()) {
+            item->widget()->deleteLater();
+        }
+        delete item;
+    }
 
-    // if (!result.value("success", false).toBool()) {
-    //     qDebug() << "Error loading app container:"
-    //              << result.value("error").toString();
-    //     QLabel *errorLabel = new QLabel("No data available for this app");
-    //     errorLabel->setAlignment(Qt::AlignCenter);
-    //     m_containerLayout->addWidget(errorLabel);
-    //     return;
-    // }
+    if (!result.value("success", false).toBool()) {
+        qDebug() << "Error loading app container:"
+                 << result.value("error").toString();
+        QLabel *errorLabel = new QLabel("No data available for this app");
+        errorLabel->setAlignment(Qt::AlignCenter);
+        m_containerLayout->addWidget(errorLabel);
+        return;
+    }
 
-    // // Get the AFC clients from the result and store them as member variables
-    // m_houseArrestAfcClient = reinterpret_cast<afc_client_t>(
-    //     result.value("afcClient").value<void *>());
-    // m_houseArrestClient = reinterpret_cast<house_arrest_client_t>(
-    //     result.value("houseArrestClient").value<void *>());
+    // Get the AFC clients from the result and store them as member
+    // variables
+    m_houseArrestAfcClient = reinterpret_cast<AfcClientHandle *>(
+        result.value("afcClient").value<void *>());
+    m_houseArrestClient = reinterpret_cast<HouseArrestClientHandle *>(
+        result.value("houseArrestClient").value<void *>());
 
-    // if (!m_houseArrestAfcClient) {
-    //     QLabel *errorLabel =
-    //         new QLabel("Failed to get AFC client for app container");
-    //     m_containerLayout->addWidget(errorLabel);
-    //     return;
-    // }
+    if (!m_houseArrestAfcClient) {
+        QLabel *errorLabel =
+            new QLabel("Failed to get AFC client for app container");
+        m_containerLayout->addWidget(errorLabel);
+        return;
+    }
 
-    // // Create AfcExplorerWidget with the house arrest AFC client
-    // AfcExplorerWidget *explorer = new AfcExplorerWidget(
-    //     m_device, true, m_houseArrestAfcClient, "/Documents", this);
-    // explorer->setStyleSheet("border :none;");
-    // m_containerLayout->addWidget(explorer);
+    // Create AfcExplorerWidget with the house arrest AFC client
+    AfcExplorerWidget *explorer = new AfcExplorerWidget(
+        m_device, true, m_houseArrestAfcClient, "/Documents", this);
+    explorer->setStyleSheet("border :none;");
+    m_containerLayout->addWidget(explorer);
 }
 
 void InstalledAppsWidget::onFileSharingFilterChanged(bool enabled)
@@ -828,15 +741,16 @@ void InstalledAppsWidget::onFileSharingFilterChanged(bool enabled)
 
 void InstalledAppsWidget::cleanupHouseArrestClients()
 {
-    // if (m_houseArrestAfcClient) {
-    //     afc_client_free(m_houseArrestAfcClient);
-    //     m_houseArrestAfcClient = nullptr;
-    // }
+    if (m_houseArrestAfcClient) {
+        // FIXME: create an issue afc_client_free crashes
+        //  afc_client_free(m_houseArrestAfcClient);
+        m_houseArrestAfcClient = nullptr;
+    }
 
-    // if (m_houseArrestClient) {
-    //     house_arrest_client_free(m_houseArrestClient);
-    //     m_houseArrestClient = nullptr;
-    // }
+    if (m_houseArrestClient) {
+        house_arrest_client_free(m_houseArrestClient);
+        m_houseArrestClient = nullptr;
+    }
 }
 
 void InstalledAppsWidget::createLeftPanel()

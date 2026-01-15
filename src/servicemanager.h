@@ -216,7 +216,7 @@ public:
     // Specific AFC operation wrappers
     static IdeviceFfiError *safeAfcReadDirectory(
         const iDescriptorDevice *device, const char *path, char ***dirs,
-        std::optional<AfcClientHandle *> altAfc = std::nullopt);
+        size_t count, std::optional<AfcClientHandle *> altAfc = std::nullopt);
 
     static IdeviceFfiError *
     safeAfcGetFileInfo(const iDescriptorDevice *device, const char *path,
@@ -245,14 +245,17 @@ public:
                                             AfcFileHandle *handle,
                                             off_t *position);
     // Utility functions
-    static QByteArray
-    safeReadAfcFileToByteArray(const iDescriptorDevice *device,
-                               const char *path);
-    static AFCFileTree safeGetFileTree(const iDescriptorDevice *device,
-                                       const std::string &path, bool checkDir);
+    static QByteArray safeReadAfcFileToByteArray(
+        const iDescriptorDevice *device, const char *path,
+        std::optional<AfcClientHandle *> altAfc = std::nullopt);
+    static AFCFileTree
+    safeGetFileTree(const iDescriptorDevice *device, const std::string &path,
+                    bool checkDir,
+                    std::optional<AfcClientHandle *> altAfc = std::nullopt);
     static QFuture<AFCFileTree>
     getFileTreeAsync(const iDescriptorDevice *device, const std::string &path,
-                     bool checkDir);
+                     bool checkDir,
+                     std::optional<AfcClientHandle *> altAfc = std::nullopt);
     static MountedImageInfo getMountedImage(const iDescriptorDevice *device);
     static IdeviceFfiError *mountImage(const iDescriptorDevice *device,
                                        const char *image_file,
@@ -271,6 +274,13 @@ public:
         const char *local_path,
         std::function<void(qint64, qint64)> progressCallback = nullptr,
         std::atomic<bool> *cancelRequested = nullptr);
+
+    static IdeviceFfiError *
+    takeScreenshot(const iDescriptorDevice *device,
+                   ScreenshotrClientHandle *screenshotrClient,
+                   ScreenshotData *screenshot);
+
+    static IdeviceFfiError *enableDevMode(const iDescriptorDevice *device);
 };
 
 #endif // SERVICEMANAGER_H

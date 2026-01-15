@@ -204,8 +204,8 @@ void AfcExplorerWidget::loadPath(const QString &path)
     updateAddressBar(path);
     updateNavigationButtons();
 
-    AFCFileTree tree =
-        ServiceManager::safeGetFileTree(m_device, path.toStdString(), m_afc);
+    AFCFileTree tree = ServiceManager::safeGetFileTree(
+        m_device, path.toStdString(), true, m_afc);
     if (!tree.success) {
         showErrorState();
         return;

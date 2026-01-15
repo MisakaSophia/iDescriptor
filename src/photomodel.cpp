@@ -683,7 +683,9 @@ void PhotoModel::populatePhotoPaths()
     qDebug() << "Photo directory C string:" << photoDir;
 
     char **files = nullptr;
-    err = ServiceManager::safeAfcReadDirectory(m_device, photoDir, &files);
+    size_t count = 0;
+    err =
+        ServiceManager::safeAfcReadDirectory(m_device, photoDir, &files, count);
     if (err) {
         qDebug() << "Failed to read photo directory:" << photoDir
                  << "Error:" << err->message;
@@ -711,8 +713,7 @@ void PhotoModel::populatePhotoPaths()
                 m_allPhotos.append(info);
             }
         }
-        // free(files);
-        // afc_dictionary_free(files);
+        free_directory_listing(files, count);
     }
 
     // Apply initial filtering and sorting, which will also reset the model
@@ -743,16 +744,11 @@ void PhotoModel::applyFilterAndSort()
 {
     beginResetModel();
 
-    // int i = 0;
     // Filter photos
     m_photos.clear();
     for (const PhotoInfo &info : m_allPhotos) {
         if (matchesFilter(info)) {
             m_photos.append(info);
-            // if (i == 3) {
-            //     break;
-            // }
-            // i++;
         }
     }
 
