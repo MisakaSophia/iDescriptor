@@ -79,19 +79,7 @@ public:
     QStringList getAllFilePaths() const;
     QStringList getFilteredFilePaths() const;
 
-    static QPixmap loadImage(iDescriptorDevice *device,
-                             const QString &filePath);
-    // Static helper methods
-    static QPixmap loadThumbnailFromDevice(iDescriptorDevice *device,
-                                           const QString &filePath,
-                                           const QSize &size);
     void clear();
-signals:
-    void thumbnailNeedsToBeLoaded(int index);
-    void exportRequested(const QStringList &filePaths);
-
-public slots:
-    void requestThumbnail(int index);
 
 private:
     // Data members
@@ -102,9 +90,6 @@ private:
 
     // Thumbnail management
     QSize m_thumbnailSize;
-    mutable QCache<QString, QPixmap> m_thumbnailCache;
-    mutable QHash<QString, QFutureWatcher<QPixmap> *> m_activeLoaders;
-    mutable QSet<QString> m_loadingPaths;
 
     // Sorting and filtering
     SortOrder m_sortOrder;
@@ -119,10 +104,9 @@ private:
     QDateTime extractDateTimeFromFile(const QString &filePath) const;
     PhotoInfo::FileType determineFileType(const QString &fileName) const;
 
-    static QPixmap generateVideoThumbnailFFmpeg(iDescriptorDevice *device,
-                                                const QString &filePath,
-                                                const QSize &requestedSize);
-    static QSemaphore m_videoThumbnailSemaphore;
+private slots:
+    void onThumbnailReady(const QString &path, const QPixmap &pixmap,
+                          unsigned int row);
 };
 
 #endif // PHOTOMODEL_H

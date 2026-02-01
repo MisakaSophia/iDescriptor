@@ -20,6 +20,7 @@
 #include "mediapreviewdialog.h"
 #include "appcontext.h"
 #include "iDescriptor-ui.h"
+#include "imageloader.h"
 #include "mediastreamermanager.h"
 #include "photomodel.h"
 #include <QApplication>
@@ -211,7 +212,7 @@ void MediaPreviewDialog::loadMedia()
 void MediaPreviewDialog::loadImage()
 {
     auto future = QtConcurrent::run(
-        [this]() { return PhotoModel::loadImage(m_device, m_filePath); });
+        [this]() { return ImageLoader::loadImage(m_device, m_filePath); });
 
     auto *watcher = new QFutureWatcher<QPixmap>(this);
     connect(watcher, &QFutureWatcher<QPixmap>::finished, this,
