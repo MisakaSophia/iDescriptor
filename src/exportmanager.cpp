@@ -59,7 +59,7 @@ QUuid ExportManager::startExport(iDescriptorDevice *device,
 {
     qDebug() << "startExport() entry - items:" << items.size()
              << "dest:" << destinationPath;
-    if (!device || !device->mutex) {
+    if (!device) {
         qWarning() << "Invalid device provided to ExportManager";
         return QUuid();
     }

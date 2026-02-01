@@ -76,19 +76,21 @@ DeviceInfoWidget::DeviceInfoWidget(iDescriptorDevice *device, QWidget *parent)
 
     ZIconWidget *shutdownBtn = new ZIconWidget(
         QIcon(":/resources/icons/IcOutlinePowerSettingsNew.png"), "Shutdown",
-        this);
+        1.0, this);
     shutdownBtn->setIconSize(QSize(20, 20));
     // connect(shutdownBtn, &ZIconWidget::clicked, this,
     //         [device]() { ToolboxWidget::shutdownDevice(device); });
 
-    ZIconWidget *restartBtn = new ZIconWidget(
-        QIcon(":/resources/icons/IcTwotoneRestartAlt.png"), "Restart", this);
+    ZIconWidget *restartBtn =
+        new ZIconWidget(QIcon(":/resources/icons/IcTwotoneRestartAlt.png"),
+                        "Restart", 1.0, this);
     restartBtn->setIconSize(QSize(20, 20));
     // connect(restartBtn, &ZIconWidget::clicked, this,
     //         [device]() { ToolboxWidget::restartDevice(device); });
 
-    ZIconWidget *recoveryBtn = new ZIconWidget(
-        QIcon(":/resources/icons/HugeiconsWrench01.png"), "Recovery", this);
+    ZIconWidget *recoveryBtn =
+        new ZIconWidget(QIcon(":/resources/icons/HugeiconsWrench01.png"),
+                        "Recovery", 1.0, this);
     recoveryBtn->setIconSize(QSize(20, 20));
     // connect(recoveryBtn, &ZIconWidget::clicked, this,
     //         [device]() { ToolboxWidget::_enterRecoveryMode(device); });

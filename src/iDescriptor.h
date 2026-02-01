@@ -76,6 +76,8 @@
 
 #define HEARTBEAT_RETRY_LIMIT 2
 
+#define DONATE_URL "https://opencollective.com/idescriptor"
+
 #ifdef __linux__
 #define LOCKDOWN_PATH "/var/lib/lockdown"
 #elif __APPLE__
@@ -219,7 +221,7 @@ struct iDescriptorDevice {
     // nullptr if the device is not jailbroken or doesn't have AFC2 installed
     AfcClientHandle *afc2Client;
     LockdowndClientHandle *lockdown;
-    std::recursive_mutex *mutex;
+    mutable std::recursive_mutex mutex;
     ImageMounterHandle *imageMounter;
     std::shared_ptr<DiagnosticsRelay> diagRelay;
     LocationSimulationHandle *locationSimulation;

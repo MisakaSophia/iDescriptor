@@ -73,7 +73,7 @@ public:
                      std::function<T()> operation,
                      std::optional<AfcClientHandle *> altAfc = std::nullopt)
     {
-        if (!device || !device->mutex) {
+        if (!device) {
             qDebug() << "[executeOperation] Device or mutex is null";
             return T{}; // Return default-constructed value for the type
         }
@@ -152,12 +152,12 @@ public:
         AfcFileHandle *handle)
     {
         try {
-            if (!device || !device->mutex) {
+            if (!device) {
                 // FIXME: we have to free error
                 return new IdeviceFfiError{1, "DEVICE_OR_MUTEX_IS_NULL"};
             }
 
-            std::lock_guard<std::recursive_mutex> lock(*device->mutex);
+            std::lock_guard<std::recursive_mutex> lock(device->mutex);
 
             // Double-check device is still valid after acquiring lock
             if (!device->afcClient) {
@@ -181,19 +181,11 @@ public:
         std::optional<AfcClientHandle *> altAfc = std::nullopt)
     {
         try {
-            if (!device || !device->mutex) {
+            if (!device) {
                 // FIXME: we have to free error
                 qDebug()
                     << "[executeAfcClientOperation] Device or mutex is null";
                 return new IdeviceFfiError{1, "DEVICE_OR_MUTEX_IS_NULL"};
-            }
-
-            std::lock_guard<std::recursive_mutex> lock(*device->mutex);
-
-            // Double-check device is still valid after acquiring lock
-            if (!device->afcClient) {
-                qDebug() << "[executeAfcClientOperation] AFC client is null";
-                return new IdeviceFfiError{1, "AFC_CLIENT_IS_NULL"};
             }
 
             std::lock_guard<std::recursive_mutex> lock(device->mutex);

@@ -44,6 +44,13 @@ struct iDescriptorToolWidget {
     QString iconName;
 };
 
+ToolboxWidget *ToolboxWidget::sharedInstance()
+{
+    static ToolboxWidget *instance = new ToolboxWidget();
+    return instance;
+}
+
+
 ToolboxWidget::ToolboxWidget(QWidget *parent) : QWidget{parent}
 {
     setupUI();
@@ -391,7 +398,7 @@ void ToolboxWidget::onCurrentDeviceChanged(const DeviceSelection &selection)
     }
 }
 
-void ToolboxWidget::onToolboxClicked(iDescriptorTool tool)
+void ToolboxWidget::onToolboxClicked(iDescriptorTool tool, bool requiresDevice)
 {
     // final check to make sure device is connected if required
     iDescriptorDevice *device = AppContext::sharedInstance()->getDevice(m_uuid);
@@ -637,4 +644,25 @@ void ToolboxWidget::_enterRecoveryMode(iDescriptorDevice *device)
     //                              unplugged.");
     //     qDebug() << "Entering recovery mode";
     // }
+}
+
+
+void ToolboxWidget::restartAirPlayWindow()
+{
+    if (!m_airplayWindow) {
+        onToolboxClicked(iDescriptorTool::Airplayer, false);
+        return;
+    }
+
+    connect(
+        m_airplayWindow, &QObject::destroyed, this,
+        [this]() {
+            // give some time for cleanup
+            QTimer::singleShot(100, this, [this]() {
+                onToolboxClicked(iDescriptorTool::Airplayer, false);
+            });
+        },
+        Qt::SingleShotConnection);
+
+    m_airplayWindow->close();
 }

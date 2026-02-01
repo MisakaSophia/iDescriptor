@@ -2,16 +2,16 @@ name: iDescriptor CI (Linux)
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - "**.cpp"
-      - "**.h"
-      - "**.hpp"
-      - "**.cxx"
-      - "**.cc"
-      - "CMakeLists.txt"
-      - "**.cmake"
-      - ".github/workflows/ci.yml"
+  # push:
+  #   paths:
+  #     - "**.cpp"
+  #     - "**.h"
+  #     - "**.hpp"
+  #     - "**.cxx"
+  #     - "**.cc"
+  #     - "CMakeLists.txt"
+  #     - "**.cmake"
+  #     - ".github/workflows/ci.yml"
 
 env:
   QT_VERSION: "6.7.2"

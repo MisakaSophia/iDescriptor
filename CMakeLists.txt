@@ -434,6 +434,7 @@ target_include_directories(iDescriptor PRIVATE
     ${IDEVICE_CPP_INCLUDE_DIR}
     ${IDEVICE_FFI_INCLUDE_DIR}
     ${PLIST_CPP_INCLUDE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/lib 
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/zupdater/src
     # System includes last
     ${IDEVICE_IMPLEMENTATION_INCLUDES}

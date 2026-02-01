@@ -61,7 +61,7 @@ void DeviceSidebarItem::setupUI()
     if (m_wireless) {
         auto wirelessIcon = new ZIconLabel(
             QIcon(":/resources/icons/QlementineIconsWireless116.png"),
-            "Wireless", this);
+            "Wireless", 1.0, this);
         nameLayout->setSpacing(5);
         nameLayout->addWidget(wirelessIcon);
     }

@@ -336,7 +336,6 @@ void AppContext::addDevice(QString udid,
                         .afcClient = initResult->afcClient,
                         .afc2Client = initResult->afc2Client,
                         .lockdown = initResult->lockdown,
-                        .mutex = new std::recursive_mutex(),
                         .imageMounter = initResult->imageMounter,
                         .diagRelay = initResult->diagRelay,
                         .locationSimulation = initResult->locationSimulation,
@@ -423,7 +422,6 @@ void AppContext::removeDevice(QString _udid)
         delete device->heartbeatThread;
     }
 
-    delete device->mutex;
     delete device;
 }
 
