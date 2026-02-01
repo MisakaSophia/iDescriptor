@@ -308,10 +308,8 @@ void InstalledAppsWidget::fetchInstalledApps()
 
                 auto installedApps = instproxy.browse(client_opts);
                 if (installedApps.is_ok()) {
-                    plist_t apps_plist;
                     installedApps.unwrap();
 
-                    // if (plist_get_node_type(apps_plist) == PLIST_ARRAY) {
                     for (const auto &app_info : installedApps.unwrap()) {
                         if (!app_info)
                             continue;
@@ -379,8 +377,6 @@ void InstalledAppsWidget::fetchInstalledApps()
                             apps.append(appData);
                         }
                     }
-
-                    plist_free(apps_plist);
                 }
                 plist_free(client_opts);
             }
@@ -440,6 +436,10 @@ void InstalledAppsWidget::onAppsDataReady()
         qDebug() << "Error connecting to SpringBoard services:"
                  << QString::fromUtf8(err->message);
     } else {
+    /*
+     FIXME:springboard_services_connect takes time
+     MOVE EVERYTHING INTO QTCONCURRENT SO IT DOESN'T BLOCK UI
+    */
         qDebug() << "Successfully connected to SpringBoard services.";
     }
 
@@ -634,37 +634,6 @@ void InstalledAppsWidget::loadAppContainer(const QString &bundleId)
                 char **dirs = nullptr;
                 size_t count = 0;
 
-                // // Use safe wrapper to read directory
-                // IdeviceFfiError *err = ServiceManager::safeAfcReadDirectory(
-                //     m_device, "/Documents", &dirs, count, afcClient);
-
-                // if (err != nullptr) {
-                //     qDebug() << "Error reading Documents dir:"
-                //              << QString::fromUtf8(err->message);
-                //     result["error"] = QString("Error reading Documents dir:
-                //     %1")
-                //                           .arg(QString::fromUtf8(err->message));
-                //     if (afcClient)
-                //         afc_client_free(afcClient);
-                //     if (houseArrestClient)
-                //         house_arrest_client_free(houseArrestClient);
-                //     return result;
-                // }
-
-                // QStringList files;
-                // if (dirs) {
-                //     for (int i = 0; dirs[i]; i++) {
-                //         QString fileName = QString::fromUtf8(dirs[i]);
-                //         if (fileName != "." && fileName != "..") {
-                //             qDebug() << "Found file:" << fileName;
-                //             files.append(fileName);
-                //         }
-                //     }
-                // }
-
-                // free_directory_listing(dirs, count);
-                // qDebug() << "Total files found:" << files.size();
-                // result["files"] = files;
                 result["afcClient"] =
                     QVariant::fromValue(reinterpret_cast<void *>(afcClient));
                 result["houseArrestClient"] = QVariant::fromValue(
