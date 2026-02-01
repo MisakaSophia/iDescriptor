@@ -416,6 +416,8 @@ init_idescriptor_device(const QString &udid,
         addr_in.sin_port = htons(0);
         inet_pton(AF_INET, wirelessArgs.ip.toUtf8().constData(),
                   &addr_in.sin_addr);
+        qDebug() << "Reading pairing file from" << wirelessArgs.pairing_file
+                 << "for udid" << udid;
         err = idevice_pairing_file_read(
             wirelessArgs.pairing_file.toUtf8().constData(), &pairing_file);
         if (err) {
@@ -545,6 +547,7 @@ init_idescriptor_device(const QString &udid,
     result.diagRelay = std::make_shared<DiagnosticsRelay>(
         DiagnosticsRelay::adopt(diagnostics_relay));
     result.locationSimulation = location_simulation;
+    result.heartbeatThread = heartbeatThread;
     // TODO cache pairing file path
     result.deviceInfo.isWireless = isWireless;
     fullDeviceInfo(infoXml, afc_client, result.diagRelay.get(), result);

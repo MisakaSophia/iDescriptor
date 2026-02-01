@@ -41,9 +41,17 @@ AppContext *AppContext::sharedInstance()
 */
 AppContext::AppContext(QObject *parent) : QObject{parent}
 {
+    cachePairedDevices();
+}
 
-    // FIXME: windows and macOS support later
-    QDir lockdowndir("/var/lib/lockdown");
+void AppContext::cachePairedDevices()
+{
+
+/*
+ does not work on macOS because we cannot read /var/db/lockdown without root perm
+*/
+#ifndef __APPLE__ 
+    QDir lockdowndir(LOCKDOWN_PATH);
     if (!lockdowndir.exists()) {
         return;
     }
@@ -54,6 +62,7 @@ AppContext::AppContext(QObject *parent) : QObject{parent}
 
     qDebug() << "Parsing cached pairing files in /var/lib/lockdown:";
     for (const QString &fileName : pairingFiles) {
+        qDebug() << "Found pairing file:" << fileName;
         plist_t fileData = nullptr;
         plist_read_from_file(
             lockdowndir.filePath(fileName).toUtf8().constData(), &fileData,
@@ -67,7 +76,7 @@ AppContext::AppContext(QObject *parent) : QObject{parent}
             PlistNavigator(fileData)["WiFiMACAddress"].getString();
         // plist_free(fileData);
         bool isCompatible = !wifiMacAddress.empty();
-        // TODO: !important invalidate old pairing files
+        // TODO: !important invalidate expired pairing files
         // sometimes there is no WiFiMACAddress
         if (!isCompatible) {
             continue;
@@ -81,6 +90,88 @@ AppContext::AppContext(QObject *parent) : QObject{parent}
         m_pairingFileCache[QString::fromStdString(wifiMacAddress)] =
             lockdowndir.filePath(fileName);
     }
+#else
+    // FIXME: implement caching for macOS
+    /* MacOS */
+    qDebug() << "Caching paired network devices from usbmuxd";
+    auto conn = UsbmuxdConnection::default_new(0);
+    if (conn.is_err()) {
+        qDebug() << "ERROR: Failed to connect to usbmuxd!";
+        // return 1;
+    }
+
+    auto devices = conn.unwrap().get_devices();
+    if (devices.is_err()) {
+        qDebug() << "ERROR: Failed to get device list!";
+        // return 1;
+    }
+
+    for (const auto &device : devices.unwrap()) {
+        auto conn_type = device.get_connection_type();
+        if (conn_type.is_some() &&
+            conn_type.unwrap().to_string() == "Network") {
+            auto udid = device.get_udid();
+            if (udid.is_some()) {
+                qDebug() << "Found network device with UDID:"
+                         << QString::fromStdString(udid.unwrap());
+
+                auto pairing_file =
+                    conn.unwrap().get_pair_record(udid.unwrap());
+
+                uint8_t *plist_data = nullptr;
+                size_t plist_size = 0;
+                IdeviceFfiError *error = idevice_pairing_file_serialize(
+                    pairing_file.unwrap().raw(), &plist_data, &plist_size);
+
+                if (error == nullptr) {
+                    plist_t root_node = nullptr;
+                    plist_from_xml((const char *)plist_data, plist_size,
+                                   &root_node);
+
+                    if (root_node) {
+                        plist_t wifi_mac_node =
+                            plist_dict_get_item(root_node, "WiFiMACAddress");
+
+                        if (wifi_mac_node &&
+                            plist_get_node_type(wifi_mac_node) ==
+                                PLIST_STRING) {
+                            char *mac_address = nullptr;
+                            plist_get_string_val(wifi_mac_node, &mac_address);
+
+                            if (mac_address) {
+                                qDebug() << "Adding to cache"
+                                         << QString::fromUtf8(mac_address);
+                                m_pairingFileCache[QString::fromUtf8(
+                                    mac_address)] =
+                                    QString::fromStdString("/var/db/lockdown/" +
+                                                           udid.unwrap() +
+                                                           ".plist");
+                                free(mac_address);
+                            }
+                        }
+
+                        plist_free(root_node);
+                    }
+                    free(plist_data);
+                }
+                // qDebug() << "Wireless device UDID:"
+                //          << QString::fromStdString(udid.unwrap())
+                //          << "Pairing file retrieval"
+                //          << (error == nullptr
+                //                  ? "succeeded"
+                //                  : QString::fromStdString(error->message));
+                // Clean up
+                // idevice_pairing_file_free(pairing_file.unwrap().raw());
+            }
+        } else if (conn_type.is_some()) {
+            auto udid = device.get_udid();
+            if (udid.is_some()) {
+                qDebug() << "Found USB device with UDID:"
+                         << QString::fromStdString(udid.unwrap());
+            }
+        }
+    }
+#endif
 }
 
 void AppContext::addDevice(QString udid,
@@ -105,15 +196,6 @@ void AppContext::addDevice(QString udid,
                     return;
                 }
 
-                QFile pairingFilePath(_pairingFilePath);
-                if (!pairingFilePath.exists()) {
-                    qDebug()
-                        << "Cannot upgrade to wireless, no pairing file for"
-                        << udid;
-                    return;
-                }
-                pairingFilePath.close();
-
                 QList<NetworkDevice> networkDevices =
                     NetworkDeviceManager::sharedInstance()
                         ->m_networkProvider->getNetworkDevices();
@@ -128,7 +210,7 @@ void AppContext::addDevice(QString udid,
                 if (it != networkDevices.constEnd()) {
 
                     *initResult = init_idescriptor_device(
-                        udid, {it->address, pairingFilePath.fileName()});
+                        udid, {it->address, _pairingFilePath});
                 } else {
                     qDebug() << "No network device found with MAC address:"
                              << wifiMacAddress;
@@ -145,15 +227,6 @@ void AppContext::addDevice(QString udid,
                     return;
                 }
 
-                QFile pairingFilePath(_pairingFilePath);
-                if (!pairingFilePath.exists()) {
-                    qDebug()
-                        << "Cannot upgrade to wireless, no pairing file for"
-                        << udid;
-                    return;
-                }
-                pairingFilePath.close();
-
                 QList<NetworkDevice> networkDevices =
                     NetworkDeviceManager::sharedInstance()
                         ->m_networkProvider->getNetworkDevices();
@@ -168,7 +241,7 @@ void AppContext::addDevice(QString udid,
 
                 if (it != networkDevices.constEnd()) {
                     *initResult = init_idescriptor_device(
-                        udid, {it->address, pairingFilePath.fileName()});
+                        udid, {it->address, _pairingFilePath});
                 } else {
                     qDebug() << "No network device found with MAC address:"
                              << wifiMacAddress;
@@ -266,7 +339,8 @@ void AppContext::addDevice(QString udid,
                         .mutex = new std::recursive_mutex(),
                         .imageMounter = initResult->imageMounter,
                         .diagRelay = initResult->diagRelay,
-                        .locationSimulation = initResult->locationSimulation};
+                        .locationSimulation = initResult->locationSimulation,
+                        .heartbeatThread = initResult->heartbeatThread};
                     m_devices[device->udid] = device;
                     if (addType == AddType::Regular) {
                         qDebug() << "Regular device added: " << udid;
@@ -335,15 +409,22 @@ void AppContext::removeDevice(QString _udid)
     emit deviceRemoved(udid, device->deviceInfo.wifiMacAddress);
     emit deviceChange();
 
-    // std::lock_guard<std::recursive_mutex> lock(*device->mutex);
+    std::lock_guard<std::recursive_mutex> lock(*device->mutex);
 
-    // if (device->afcClient)
-    //     afc_client_free(device->afcClient);
-    // if (device->afc2Client)
-    //     afc_client_free(device->afc2Client);
+    if (device->afcClient)
+        afc_client_free(device->afcClient);
+    if (device->afc2Client)
+        afc_client_free(device->afc2Client);
     // idevice_free(device->device);
-    // delete device->mutex;
-    // delete device;
+
+    if (device->heartbeatThread) {
+        device->heartbeatThread->requestInterruption();
+        device->heartbeatThread->wait();
+        delete device->heartbeatThread;
+    }
+
+    delete device->mutex;
+    delete device;
 }
 
 #ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
@@ -427,16 +508,21 @@ void AppContext::addRecoveryDevice(uint64_t ecid)
 
 AppContext::~AppContext()
 {
-    //     for (auto device : m_devices) {
-    //         emit deviceRemoved(device->udid);
-    //         if (device->afcClient)
-    //             afc_client_free(device->afcClient);
-    //         if (device->afc2Client)
-    //             afc_client_free(device->afc2Client);
-    //         idevice_free(device->device);
-    //         delete device->mutex;
-    //         delete device;
-    //     }
+    // FIXME: mutex?
+    for (auto device : m_devices) {
+        emit deviceRemoved(device->udid, device->deviceInfo.wifiMacAddress);
+        if (device->afcClient)
+            afc_client_free(device->afcClient);
+        if (device->afc2Client)
+            afc_client_free(device->afc2Client);
+        // idevice_free(device->device);
+
+        if (device->heartbeatThread) {
+            device->heartbeatThread->requestInterruption();
+            device->heartbeatThread->wait();
+            delete device->heartbeatThread;
+        }
+    }
 
     // #ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
     //     for (auto recoveryDevice : m_recoveryDevices) {
@@ -492,6 +578,17 @@ const QString AppContext::getCachedPairingFile(const QString &udid) const
     // Retrieve the pairing file from the cache
     if (m_pairingFileCache.contains(udid)) {
         pairingFile = m_pairingFileCache.value(udid);
+    } else {
+        // FIXME: mac support
+        // IdevicePairingFile* pairing_file = nullptr;
+        // const char* file_path = udid.toUtf8().constData();
+        // IdeviceFfiError* err = idevice_pairing_file_read(file_path,
+        // &pairing_file); if (err == nullptr || pairing_file == nullptr) {
+        //     pairingFile = QString::fromUtf8(file_path);
+        // } else {
+        //     qDebug() << "Failed to read pairing file for UDID:" << udid <<
+        //     "Error:" << err->message; idevice_error_free(err);
+        // }
     }
 
     return pairingFile;
@@ -500,4 +597,33 @@ const QString AppContext::getCachedPairingFile(const QString &udid) const
 void AppContext::heartbeatFailed(const QString &macAddress, int tries)
 {
     emit deviceHeartbeatFailed(macAddress, tries);
+}
+
+void AppContext::tryToConnectToNetworkDevice(const QString &macAddress)
+{
+
+    // force refresh macAddress-udid mapping
+    cachePairedDevices();
+
+    QList<NetworkDevice> networkDevices =
+        NetworkDeviceManager::sharedInstance()
+            ->m_networkProvider->getNetworkDevices();
+
+    auto it =
+        std::find_if(networkDevices.constBegin(), networkDevices.constEnd(),
+                     [macAddress](const NetworkDevice &device) {
+                         return device.macAddress.compare(
+                                    macAddress, Qt::CaseInsensitive) == 0;
+                     });
+
+    if (it != networkDevices.constEnd()) {
+        QMetaObject::invokeMethod(
+            AppContext::sharedInstance(), "addDevice", Qt::QueuedConnection,
+            Q_ARG(QString, macAddress),
+            Q_ARG(DeviceMonitorThread::IdeviceConnectionType,
+                  DeviceMonitorThread::CONNECTION_NETWORK),
+            Q_ARG(AddType, AddType::Wireless), Q_ARG(QString, macAddress));
+    } else {
+        qDebug() << "No network device found with MAC address:" << macAddress;
+    }
 }

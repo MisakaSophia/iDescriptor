@@ -38,6 +38,7 @@ public:
     void cachePairingFile(const QString &udid, const QString &pairingFilePath);
     const QString getCachedPairingFile(const QString &udid) const;
 
+    void tryToConnectToNetworkDevice(const QString &macAddress);
     // #ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
     //     QList<iDescriptorRecoveryDevice *> getAllRecoveryDevices();
     // #endif
@@ -57,6 +58,7 @@ private:
     QStringList m_pendingDevices;
     DeviceSelection m_currentSelection = DeviceSelection("");
     QMap<QString, QString> m_pairingFileCache;
+    void cachePairedDevices();
 signals:
     void deviceAdded(iDescriptorDevice *device);
     void deviceRemoved(const std::string &udid, const std::string &macAddress);

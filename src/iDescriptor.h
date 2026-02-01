@@ -23,6 +23,7 @@
 #include <QJsonObject>
 #include <QNetworkAccessManager>
 #include <QRegularExpression>
+#include <QThread>
 #include <QtCore/QObject>
 
 // #include "idevice.h"
@@ -80,7 +81,8 @@
 #elif __APPLE__
 #define LOCKDOWN_PATH "/var/db/lockdown"
 #else
-#define LOCKDOWN_PATH ""
+/* Windows */
+#define LOCKDOWN_PATH qgetenv("PROGRAMDATA") + "/Apple/Lockdown"
 #endif
 
 struct BatteryInfo {
@@ -214,12 +216,15 @@ struct iDescriptorDevice {
     IdeviceProviderHandle *provider;
     DeviceInfo deviceInfo;
     AfcClientHandle *afcClient;
+    // nullptr if the device is not jailbroken or doesn't have AFC2 installed
     AfcClientHandle *afc2Client;
     LockdowndClientHandle *lockdown;
     std::recursive_mutex *mutex;
     ImageMounterHandle *imageMounter;
     std::shared_ptr<DiagnosticsRelay> diagRelay;
     LocationSimulationHandle *locationSimulation;
+    // nullptr on USB devices
+    QThread *heartbeatThread;
 };
 
 struct iDescriptorInitDeviceResult {
@@ -233,6 +238,7 @@ struct iDescriptorInitDeviceResult {
     ImageMounterHandle *imageMounter;
     std::shared_ptr<DiagnosticsRelay> diagRelay;
     LocationSimulationHandle *locationSimulation;
+    QThread *heartbeatThread;
 };
 // #ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
 // struct iDescriptorRecoveryDevice {
