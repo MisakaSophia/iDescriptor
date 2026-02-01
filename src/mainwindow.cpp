@@ -37,6 +37,7 @@
 #include <QHBoxLayout>
 #include <QStack>
 #include <QStackedWidget>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
 #include <unistd.h>
@@ -44,7 +45,7 @@
 #include "appcontext.h"
 #include "settingsmanager.h"
 // #include "devicemonitor.h"
-#include "Toast.h"
+// #include "Toast.h"
 #include "networkdevicemanager.h"
 #include "networkdeviceswidget.h"
 #include "statusballoon.h"
@@ -414,7 +415,10 @@ MainWindow::MainWindow(QWidget *parent)
             }
         });
 
-    m_deviceMonitor->start();
+    /* If a device is connected before starting the app on slower machines ui
+     * takes a lot of time to render so delay the monitoring a bit  */
+    QTimer::singleShot(std::chrono::seconds(1), this,
+                       [this]() { m_deviceMonitor->start(); });
 
     connect(AppContext::sharedInstance(), &AppContext::deviceRemoved, this,
             [](const std::string &udid, const std::string &wifiMacAddress) {
@@ -469,17 +473,17 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(AppContext::sharedInstance(), &AppContext::deviceHeartbeatFailed,
             this, [this](const QString &macAddress, int tries) {
-                Toast *toast = new Toast(this);
-                toast->setAttribute(Qt::WA_DeleteOnClose);
-                toast->setDuration(8000); // Hide after 8 seconds
-                toast->setTitle("Heartbeat failed");
-                toast->setText(
-                    QString("Heartbeat failed for device with MAC %1. "
-                            "Number of failed attempts: %2")
-                        .arg(macAddress)
-                        .arg(tries));
-                toast->setPosition(ToastPosition::BOTTOM_MIDDLE);
-                toast->show();
+                // Toast *toast = new Toast(this);
+                // toast->setAttribute(Qt::WA_DeleteOnClose);
+                // toast->setDuration(8000); // Hide after 8 seconds
+                // toast->setTitle("Heartbeat failed");
+                // toast->setText(
+                //     QString("Heartbeat failed for device with MAC %1. "
+                //             "Number of failed attempts: %2")
+                //         .arg(macAddress)
+                //         .arg(tries));
+                // toast->setPosition(ToastPosition::BOTTOM_MIDDLE);
+                // toast->show();
             });
 
     // NetworkDevicesWidget *m_networkDevicesWidget = new
@@ -532,7 +536,7 @@ MainWindow::~MainWindow()
     delete ui;
     m_deviceMonitor->requestInterruption();
     // FIXME:QThread: Destroyed while thread '' is still running
-    //  m_deviceMonitor->wait();
+    // m_deviceMonitor->wait();
     delete m_deviceMonitor;
     // delete m_updater;
     // sleep(2);

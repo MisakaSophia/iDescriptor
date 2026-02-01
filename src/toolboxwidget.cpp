@@ -79,8 +79,9 @@ void ToolboxWidget::setupUI()
     m_scrollArea = new QScrollArea();
     m_scrollArea->setWidgetResizable(true);
     m_scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_scrollArea->setFrameStyle(QFrame::NoFrame);
-    m_scrollArea->viewport()->setAutoFillBackground(false);
+    m_scrollArea->setStyleSheet(
+        "QScrollArea { background: transparent; border: none; }");
+    m_scrollArea->viewport()->setStyleSheet("background: transparent;");
 
     m_contentWidget = new QWidget();
     QVBoxLayout *contentLayout = new QVBoxLayout(m_contentWidget);

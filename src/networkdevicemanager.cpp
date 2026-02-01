@@ -1,4 +1,5 @@
 #include "networkdevicemanager.h"
+#include <QTimer>
 
 NetworkDeviceManager *NetworkDeviceManager::sharedInstance()
 {
@@ -23,6 +24,7 @@ NetworkDeviceManager::NetworkDeviceManager(QObject *parent) : QObject{parent}
             &NetworkDeviceManager::deviceRemoved);
 #endif
 
-    // Start scanning for network devices
-    m_networkProvider->startBrowsing();
+    /* Helps main ui load a litte faster */
+    QTimer::singleShot(std::chrono::seconds(1), this,
+                       [this]() { m_networkProvider->startBrowsing(); });
 }
