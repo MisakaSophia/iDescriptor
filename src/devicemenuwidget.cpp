@@ -18,7 +18,7 @@
  */
 
 #include "devicemenuwidget.h"
-#include "Toast.h"
+// #include "Toast.h"
 #include "cableinfowidget.h"
 #include "devdiskimageswidget.h"
 #include "iDescriptor.h"
@@ -91,33 +91,34 @@ void DeviceMenuWidget::init()
     stackedWidget->removeWidget(loadingWidget);
     loadingWidget->deleteLater();
 
-    if (m_device->deviceInfo.parsedDeviceVersion.major < 13) {
-        Toast *toast = new Toast(this);
-        toast->setAttribute(Qt::WA_DeleteOnClose);
-        toast->setDuration(8000); // Hide after 8 seconds
-        toast->setTitle("Not wireless compatible");
-        toast->setText("This device is not wireless compatible.");
-        toast->setPosition(ToastPosition::BOTTOM_MIDDLE);
-        toast->show();
-    } else {
-        if (m_device->deviceInfo.isWireless)
-            return;
-        bool enabled = ServiceManager::enableWirelessConnections(m_device);
-        Toast *toast = new Toast(this);
-        toast->setAttribute(Qt::WA_DeleteOnClose);
-        toast->setDuration(8000); // Hide after 8 seconds
-        toast->setPosition(ToastPosition::BOTTOM_MIDDLE);
-        if (enabled) {
-            toast->setTitle("Wireless connections enabled");
-            toast->setText(
-                "You can now use wireless connections with this device.");
-        } else {
-            toast->setTitle("Failed to enable wireless connections");
-            toast->setText(
-                "Could not enable wireless connections for this device.");
-        }
-        toast->show();
-    }
+    // FIXME: toast really necessary here?
+    //  if (m_device->deviceInfo.parsedDeviceVersion.major < 13) {
+    //      Toast *toast = new Toast(this);
+    //      toast->setAttribute(Qt::WA_DeleteOnClose);
+    //      toast->setDuration(8000); // Hide after 8 seconds
+    //      toast->setTitle("Not wireless compatible");
+    //      toast->setText("This device is not wireless compatible.");
+    //      toast->setPosition(ToastPosition::BOTTOM_MIDDLE);
+    //      toast->show();
+    //  } else {
+    //      if (m_device->deviceInfo.isWireless)
+    //          return;
+    //      bool enabled = ServiceManager::enableWirelessConnections(m_device);
+    //      Toast *toast = new Toast(this);
+    //      toast->setAttribute(Qt::WA_DeleteOnClose);
+    //      toast->setDuration(8000); // Hide after 8 seconds
+    //      toast->setPosition(ToastPosition::BOTTOM_MIDDLE);
+    //      if (enabled) {
+    //          toast->setTitle("Wireless connections enabled");
+    //          toast->setText(
+    //              "You can now use wireless connections with this device.");
+    //      } else {
+    //          toast->setTitle("Failed to enable wireless connections");
+    //          toast->setText(
+    //              "Could not enable wireless connections for this device.");
+    //      }
+    //      toast->show();
+    //  }
 }
 
 void DeviceMenuWidget::switchToTab(const QString &tabName)

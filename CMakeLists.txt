@@ -349,7 +349,7 @@ endif()
 add_subdirectory(lib/uxplay)
 add_subdirectory(lib/ipatool-go)
 add_subdirectory(lib/zupdater)
-add_subdirectory(lib/ztoast)
+# add_subdirectory(lib/ztoast)
 
 if (WIN32) 
     set(NO_DEPLOY_WIN_IFUSE ON) 
@@ -419,7 +419,7 @@ target_link_libraries(iDescriptor PRIVATE
     uxplay
     ipatool-go
     ZUpdater
-    ZToast
+    # ZToast
     ${IDEVICE_IMPLEMENTATION_LIBS}
     SQLite::SQLite3
 )
