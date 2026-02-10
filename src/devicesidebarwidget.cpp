@@ -18,11 +18,15 @@
  */
 
 #include "devicesidebarwidget.h"
+#include "BackDrop.h"
 #include "appcontext.h"
 #include "iDescriptor-ui.h"
 #include "loadingspinnerwidget.h"
 #include "qprocessindicator.h"
 #include <QDebug>
+#include <QGraphicsBlurEffect>
+#include <QGraphicsPixmapItem>
+#include <QGraphicsScene>
 
 // DeviceSidebarItem Implementation
 DeviceSidebarItem::DeviceSidebarItem(const QString &deviceName,
@@ -115,11 +119,11 @@ void DeviceSidebarItem::setupUI()
         btn->setMaximumHeight(25);
         btn->setStyleSheet(
             QString("QPushButton { "
-                    "  background-color: #f8f9fa; "
-                    "  border: 1px solid #dee2e6; "
+                    "  background-color: rgba(255, 255, 255, 120); "
+                    "  border: 1px solid rgba(255, 255, 255, 200); "
                     "  padding: 4px 8px; "
                     "  text-align: center; "
-                    "  border-radius: 3px; "
+                    "  border-radius: 6px; "
                     "  font-size: 11px; "
                     "  color: #212529; "
                     "} "
@@ -129,8 +133,8 @@ void DeviceSidebarItem::setupUI()
                     "  border: 1px solid %1; "
                     "} "
                     "QPushButton:hover:!checked { "
-                    "  background-color: #e9ecef; "
-                    "  border-color: #adb5bd; "
+                    "  background-color: rgba(255, 255, 255, 180); "
+                    "  border-color: %2; "
                     "} "
                     "QPushButton:checked:hover { "
                     "  background-color: %2; "
@@ -155,19 +159,7 @@ void DeviceSidebarItem::setupUI()
     setSelected(false);
 }
 
-void DeviceSidebarItem::setSelected(bool selected)
-{
-    m_selected = selected;
-    // todo : bug the first device selected style is not applied
-    if (selected) {
-        setStyleSheet(QString("DeviceSidebarItem { border: "
-                              "2px solid %1; border-radius: 5px; }")
-                          .arg(COLOR_BLUE.name()));
-    } else {
-        setStyleSheet("DeviceSidebarItem { border: "
-                      "1px solid #e0e0e0; border-radius: 5px; }");
-    }
-}
+void DeviceSidebarItem::setSelected(bool selected) { m_selected = selected; }
 
 void DeviceSidebarItem::setCollapsed(bool collapsed)
 {
@@ -457,4 +449,71 @@ void DevicePendingSidebarItem::mousePressEvent(QMouseEvent *event)
 {
     emit clicked();
     QFrame::mousePressEvent(event);
+}
+
+// FIXME: better move this to a separate file
+void DeviceSidebarItem::paintEvent(QPaintEvent *event)
+{
+    Q_UNUSED(event);
+
+    QPainter p(this);
+    p.setRenderHints(QPainter::Antialiasing | QPainter::SmoothPixmapTransform);
+
+    const qreal dpr = devicePixelRatioF();
+    const int w = width();
+    const int h = height();
+    const int sw = int(w * dpr);
+    const int sh = int(h * dpr);
+
+    constexpr int kCornerRadius = 10;
+    constexpr int kBlurRadius = 2;
+
+    // Cache the blurred background per size
+    static QPixmap cachedBg;
+    static QSize cachedSize;
+
+    const QSize cacheSize(sw, sh);
+    if (cachedSize != cacheSize) {
+        cachedSize = cacheSize;
+
+        QPixmap gradPm(sw, sh);
+        gradPm.fill(Qt::transparent);
+        {
+            QPainter gp(&gradPm);
+            gp.setRenderHints(QPainter::Antialiasing |
+                              QPainter::SmoothPixmapTransform);
+
+            QLinearGradient grad(0, 0, 1, 1);
+            grad.setCoordinateMode(QGradient::ObjectMode);
+            grad.setStops({{0.0, QColor(255, 255, 255, 255)},
+                           {0.35, QColor(255, 255, 255, 125)},
+                           {0.65, QColor(255, 255, 255, 125)},
+                           {1.0, QColor(255, 255, 255, 255)}});
+
+            gp.fillRect(QRectF(0, 0, sw, sh), grad);
+        }
+
+        QPixmap blurred = BackDrop::blurPixmap(gradPm, kBlurRadius);
+
+        QPixmap mask = BackDrop::getColoredPixmap(
+            QBrush(Qt::white), Qt::white, 1, sw, sh, int(kCornerRadius * dpr));
+
+        BackDrop::cutPixmap(blurred, mask, sw, sh);
+
+        blurred.setDevicePixelRatio(dpr);
+        cachedBg = blurred;
+    }
+
+    QPainterPath clipPath;
+    QRectF r = rect().adjusted(0.5, 0.5, -0.5, -0.5);
+    clipPath.addRoundedRect(r, kCornerRadius, kCornerRadius);
+    p.setClipPath(clipPath);
+    p.drawPixmap(r.toRect(), cachedBg);
+
+    p.setClipping(false);
+    QColor borderColor = m_selected ? COLOR_BLUE : QColor("#FFFFFF");
+    QPen pen(borderColor, m_selected ? 2.0 : 1.0);
+    p.setPen(pen);
+    p.setBrush(Qt::NoBrush);
+    p.drawRoundedRect(r, kCornerRadius, kCornerRadius);
 }

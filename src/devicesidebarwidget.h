@@ -45,6 +45,8 @@ public:
     void setCollapsed(bool collapsed);
     bool isCollapsed() const { return m_collapsed; }
 
+protected:
+    void paintEvent(QPaintEvent *event) override;
 signals:
     void deviceSelected(const std::string &uuid);
     void navigationRequested(const std::string &uuid, const QString &section);
