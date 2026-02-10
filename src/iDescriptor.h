@@ -210,6 +210,8 @@ struct DeviceInfo {
     DeviceVersion parsedDeviceVersion;
     std::string wifiMacAddress;
     bool isWireless = false;
+    // empty on USB devices
+    std::string ipAddress;
 };
 
 struct iDescriptorDevice {
