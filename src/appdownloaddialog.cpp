@@ -18,11 +18,15 @@
  */
 
 #include "appdownloaddialog.h"
+#include "Backdrop.h"
 #include "iDescriptor-ui.h"
+#include "iDescriptor.h"
 #include "libipatool-go.h"
 #include <QDesktopServices>
 #include <QFileDialog>
 #include <QLabel>
+#include <QNetworkAccessManager>
+#include <QPointer>
 #include <QPushButton>
 #include <QStandardPaths>
 #include <QVBoxLayout>
@@ -38,15 +42,38 @@ AppDownloadDialog::AppDownloadDialog(const QString &appName,
 {
     setWindowTitle("Download " + appName + " IPA");
     setModal(true);
-    // setFixedSize(500, 270);
     setFixedWidth(500);
 
-    QVBoxLayout *layout = qobject_cast<QVBoxLayout *>(this->layout());
+    m_loadingWidget = new ZLoadingWidget(this);
+    layout()->addWidget(m_loadingWidget);
+    QVBoxLayout *contentLayout = new QVBoxLayout(this);
+    contentLayout->setContentsMargins(0, 0, 0, 0);
+
+    m_bgLabel = new QLabel();
+    // FIMXE: causes infinite scaling for some reason, need to investigate
+    //  m_bgLabel->setScaledContents(true);
+    //  m_bgLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
+    //  contentLayout->addWidget(m_bgLabel);
+
+    QPointer<AppDownloadDialog> safeThis = this;
+    fetchAppIconFromApple(
+        m_manager, bundleId,
+        [safeThis](const QPixmap &icon, const QJsonObject &appInfo) {
+            if (auto dialog = safeThis.data()) {
+                if (!icon.isNull()) {
+                    QPixmap blurred = BackDrop::blurPixmap(icon, 30);
+                    dialog->m_bgLabel->setPixmap(blurred.scaled(
+                        dialog->size(), Qt::KeepAspectRatioByExpanding,
+                        Qt::SmoothTransformation));
+                }
+                dialog->m_loadingWidget->stop(true);
+            }
+        });
 
     QLabel *descLabel = new QLabel(description);
     descLabel->setWordWrap(true);
     descLabel->setStyleSheet("font-size: 14px; color: #666;");
-    layout->insertWidget(1, descLabel);
+    contentLayout->insertWidget(1, descLabel);
 
     // Directory selection UI
     QHBoxLayout *dirLayout = new QHBoxLayout();
@@ -64,7 +91,7 @@ AppDownloadDialog::AppDownloadDialog(const QString &appName,
     dirLayout->addWidget(m_dirLabel, 1);
 
     m_dirButton = new QPushButton("Choose...");
-    m_dirButton->setStyleSheet("font-size: 14px; padding: 4px 12px;");
+    // m_dirButton->setStyleSheet("font-size: 14px; padding: 4px 12px;");
     connect(m_dirButton, &QPushButton::clicked, this, [this]() {
         QString dir = QFileDialog::getExistingDirectory(
             this, "Select Directory to Save IPA", m_outputDir);
@@ -75,22 +102,28 @@ AppDownloadDialog::AppDownloadDialog(const QString &appName,
     });
     dirLayout->addWidget(m_dirButton);
 
-    layout->insertLayout(2, dirLayout);
+    contentLayout->insertLayout(2, dirLayout);
+
+    QHBoxLayout *buttonLayout = new QHBoxLayout();
 
     m_actionButton = new QPushButton("Download IPA");
-    m_actionButton->setFixedHeight(40);
+    // m_actionButton->setFixedHeight(40);
     m_actionButton->setDefault(true);
     connect(m_actionButton, &QPushButton::clicked, this,
             &AppDownloadDialog::onDownloadClicked);
-    layout->addWidget(m_actionButton);
+    buttonLayout->addWidget(m_actionButton);
 
     QPushButton *cancelButton = new QPushButton("Cancel");
-    cancelButton->setFixedHeight(40);
-    cancelButton->setStyleSheet(
-        "background-color: #f0f0f0; color: #333; border: 1px solid #ddd; "
-        "border-radius: 6px; font-size: 16px;");
+    // cancelButton->setFixedHeight(40);
+    // cancelButton->setStyleSheet(
+    //     "background-color: #f0f0f0; color: #333; border: 1px solid #ddd; "
+    //     "border-radius: 6px; font-size: 16px;");
     connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
-    layout->addWidget(cancelButton);
+    buttonLayout->addWidget(cancelButton);
+
+    contentLayout->addLayout(buttonLayout);
+
+    m_loadingWidget->setupContentWidget(contentLayout);
 }
 
 void AppDownloadDialog::onDownloadClicked()

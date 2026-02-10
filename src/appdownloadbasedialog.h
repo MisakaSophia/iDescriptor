@@ -21,6 +21,7 @@
 #define APPDOWNLOADBASEDIALOG_H
 
 #include <QDialog>
+#include <QNetworkAccessManager>
 #include <QProcess>
 #include <QProgressBar>
 #include <QPushButton>
@@ -33,6 +34,14 @@ public:
     explicit AppDownloadBaseDialog(const QString &appName,
                                    const QString &bundleId,
                                    QWidget *parent = nullptr);
+
+    QNetworkAccessManager *m_manager = new QNetworkAccessManager(this);
+    QPushButton *m_actionButton;
+    QProgressBar *m_progressBar;
+    QTimer *m_progressTimer;
+    QProcess *m_downloadProcess;
+    QString m_appName;
+    QVBoxLayout *m_layout;
 
 public slots:
     void updateProgressBar(int percentage);
@@ -51,12 +60,8 @@ protected:
     void addProgressBar(int index);
     void tryToDownload(const QString &bundleId, const QString &outputDir,
                        bool promptToOpenDir, bool close = false);
-    QProgressBar *m_progressBar;
-    QTimer *m_progressTimer;
-    QProcess *m_downloadProcess;
-    QString m_appName;
-    QPushButton *m_actionButton;
-    QVBoxLayout *m_layout;
+
+private:
     bool m_operationInProgress = false;
     QString m_bundleId;
     uint m_tries = 0;

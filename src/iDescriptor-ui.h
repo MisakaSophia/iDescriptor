@@ -36,7 +36,7 @@
 #include <QWheelEvent>
 #include <QWidget>
 
-#ifdef Q_OS_MAC
+#ifdef __APPLE__
 #include "./platform/macos.h"
 #endif
 

@@ -22,6 +22,7 @@
 
 #include "appdownloadbasedialog.h"
 #include "iDescriptor-ui.h"
+#include "zloadingwidget.h"
 #include <QDialog>
 #include <QLabel>
 #include <QPushButton>
@@ -34,6 +35,13 @@ public:
                                const QString &description,
                                QWidget *parent = nullptr);
 
+protected:
+    void resizeEvent(QResizeEvent *event) override
+    {
+        QWidget::resizeEvent(event);
+        m_bgLabel->setFixedSize(event->size());
+    }
+
 private slots:
     void onDownloadClicked();
 
@@ -42,6 +50,8 @@ private:
     QPushButton *m_dirButton;
     ZLabel *m_dirLabel;
     QString m_bundleId;
+    QLabel *m_bgLabel;
+    ZLoadingWidget *m_loadingWidget;
 };
 
 #endif // APPDOWNLOADDIALOG_H

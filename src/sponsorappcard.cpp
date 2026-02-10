@@ -59,7 +59,7 @@ SponsorAppCard::SponsorAppCard(QWidget *parent) : QWidget{parent}
     QString websiteUrl = "https://www.shopify.com";
 
     ::fetchAppIconFromApple(
-        m_networkManager, bundleId, [iconLabel](const QPixmap &pixmap) {
+        m_networkManager, bundleId, [iconLabel](const QPixmap &pixmap, const QJsonObject &appInfo) {
             if (!pixmap.isNull()) {
                 QPixmap scaled =
                     pixmap.scaled(64, 64, Qt::KeepAspectRatioByExpanding,

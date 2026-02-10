@@ -570,7 +570,8 @@ void AppsWidget::createAppCard(
         connect(iconLabel, &QObject::destroyed, reply, &QNetworkReply::abort);
     } else if (!bundleId.isEmpty()) {
         fetchAppIconFromApple(
-            m_networkManager, bundleId, [safeIconLabel](const QPixmap &pixmap) {
+            m_networkManager, bundleId,
+            [safeIconLabel](const QPixmap &pixmap, const QJsonObject &appInfo) {
                 // Check if iconLabel still exists
                 if (safeIconLabel && !pixmap.isNull()) {
                     QPixmap scaled =

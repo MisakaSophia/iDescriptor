@@ -45,13 +45,13 @@ AppInstallDialog::AppInstallDialog(const QString &appName,
     setWindowTitle("Install " + appName + " - iDescriptor");
     setModal(true);
     setFixedWidth(500);
-    m_manager = new QNetworkAccessManager(this);
     QVBoxLayout *layout = qobject_cast<QVBoxLayout *>(this->layout());
     // App info section
     QHBoxLayout *appInfoLayout = new QHBoxLayout();
     QLabel *iconLabel = new QLabel();
     ::fetchAppIconFromApple(
-        m_manager, bundleId, [iconLabel](const QPixmap &pixmap) {
+        m_manager, bundleId,
+        [iconLabel](const QPixmap &pixmap, const QJsonObject &appInfo) {
             if (!pixmap.isNull()) {
                 QPixmap scaled =
                     pixmap.scaled(64, 64, Qt::KeepAspectRatioByExpanding,

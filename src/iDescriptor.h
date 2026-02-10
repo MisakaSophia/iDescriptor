@@ -491,9 +491,9 @@ void get_battery_info(DiagnosticsRelay *diagRelay, plist_t &diagnostics);
 // void parseOldDeviceBattery(PlistNavigator &ioreg, DeviceInfo &d);
 // void parseDeviceBattery(PlistNavigator &ioreg, DeviceInfo &d);
 
-void fetchAppIconFromApple(QNetworkAccessManager *manager,
-                           const QString &bundleId,
-                           std::function<void(const QPixmap &)> callback);
+void fetchAppIconFromApple(
+    QNetworkAccessManager *manager, const QString &bundleId,
+    std::function<void(const QPixmap &, const QJsonObject &)> callback);
 
 void _get_cable_info(const iDescriptorDevice *device, plist_t &response);
 
