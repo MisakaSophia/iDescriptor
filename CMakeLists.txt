@@ -97,6 +97,8 @@ message(STATUS "Using idevice-rs Rust implementation")
 set(IDEVICE_RS_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/idevice-rs)
 set(IDEVICE_RS_LIB_PATH ${IDEVICE_RS_SOURCE_DIR}/target/debug/libidevice_ffi.a)
 
+# FIXME: update env elsewhere so cargo gets detected
+if(APPLE)
 add_custom_command(
     OUTPUT ${IDEVICE_RS_LIB_PATH}
     # Ensure rustc is visible in the build environment
@@ -108,6 +110,16 @@ add_custom_command(
     COMMENT "Building idevice-rs FFI libraryy"
     VERBATIM
 )
+else()
+add_custom_command(
+    OUTPUT ${IDEVICE_RS_LIB_PATH}
+    COMMAND ${CARGO_EXECUTABLE} build --manifest-path ${IDEVICE_RS_SOURCE_DIR}/Cargo.toml
+    WORKING_DIRECTORY ${IDEVICE_RS_SOURCE_DIR}
+    COMMENT "Building idevice-rs FFI libraryy"
+    VERBATIM
+)
+endif()
+
 
 # This custom target provides a name to build the Rust library explicitly.
 # It depends on the output file, ensuring the custom command is run.
