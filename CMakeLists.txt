@@ -11,6 +11,9 @@ set(PACKAGE_MANAGER_HINT "" CACHE STRING "Name of package manager(s) used to man
 option(PACKAGE_MANAGER_MANAGED "Build as package manager managed version (auto updates will be handled by the package manager)" OFF)
 option(DEPLOY "Deploy the application (WIN32 only)" ON)
 
+find_program(CARGO_EXECUTABLE cargo REQUIRED PATHS /usr/local/bin)
+set(ENV{PATH} "$ENV{HOME}/.cargo/bin:/usr/local/bin:$ENV{PATH}")
+
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
@@ -94,11 +97,13 @@ message(STATUS "Using idevice-rs Rust implementation")
 set(IDEVICE_RS_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/idevice-rs)
 set(IDEVICE_RS_LIB_PATH ${IDEVICE_RS_SOURCE_DIR}/target/debug/libidevice_ffi.a)
 
-# This command builds the Rust library and declares its output file.
-# Any target that uses this output file will automatically depend on this command.
 add_custom_command(
     OUTPUT ${IDEVICE_RS_LIB_PATH}
-    COMMAND ${CARGO_EXECUTABLE} build --manifest-path ${IDEVICE_RS_SOURCE_DIR}/Cargo.toml
+    # Ensure rustc is visible in the build environment
+    COMMAND ${CMAKE_COMMAND} -E env
+            "PATH=$ENV{HOME}/.cargo/bin:/usr/local/bin:$ENV{PATH}"
+            "RUSTC=/usr/local/bin/rustc"
+            ${CARGO_EXECUTABLE} build --manifest-path ${IDEVICE_RS_SOURCE_DIR}/Cargo.toml
     WORKING_DIRECTORY ${IDEVICE_RS_SOURCE_DIR}
     COMMENT "Building idevice-rs FFI libraryy"
     VERBATIM
@@ -124,12 +129,14 @@ set(PLIST_CPP_SRC_DIR       ${IDEVICE_RS_SOURCE_DIR}/plist_ffi/cpp/src)
 # Collect C++ sources for the wrapper library
 file(GLOB_RECURSE IDEVICE_CPP_SOURCES
   "${IDEVICE_CPP_SRC_DIR}/*.cpp"
+  "${IDEVICE_CPP_INCLUDE_DIR}/diagnostics_relay.cpp"
 )
 file(GLOB PLIST_CPP_SOURCES
   "${PLIST_CPP_SRC_DIR}/*.cpp"
 )
 
 add_library(idevice_cpp STATIC ${IDEVICE_CPP_SOURCES} ${PLIST_CPP_SOURCES})
+add_dependencies(idevice_cpp idevice_rs_build)
 
 target_include_directories(idevice_cpp PUBLIC
     ${IDEVICE_CPP_INCLUDE_DIR}
@@ -212,111 +219,18 @@ pkg_check_modules(PUGIXML REQUIRED IMPORTED_TARGET pugixml)
 
 
 file(GLOB PROJECT_SOURCES
+src/*.h
 src/*.cpp
 src/core/helpers/*.cpp
 src/core/services/*.cpp
-src/*.h
-# src/mainwindow.cpp
-# src/mainwindow.h
-# src/devicemonitor.h
-# src/main.cpp
-# src/core/services/init_device.cpp
-# src/core/services/get_battery_info.cpp
-# src/core/services/detect_jailbroken.cpp
-# src/appcontext.cpp
-# src/appcontext.h
-# src/devicedatabase.cpp
-# src/devicedatabase.h
-# src/core/helpers/compare_product_type.cpp
-# src/welcomewidget.cpp
-# src/welcomewidget.h
-# src/ztabwidget.cpp
-# src/ztabwidget.h
-# src/devicemanagerwidget.cpp
-# src/devicemanagerwidget.h
-# src/responsiveqlabel.cpp
-# src/responsiveqlabel.h
-# src/devicesidebarwidget.cpp
-# src/devicesidebarwidget.h
-# src/devicemenuwidget.cpp
-# src/devicemenuwidget.h
-# src/deviceinfowidget.cpp
-# src/deviceinfowidget.h
-# src/batterywidget.cpp
-# src/batterywidget.h
-# src/diskusagewidget.cpp
-# src/diskusagewidget.h
-# # src/deviceimagewidget.cpp
-# # src/deviceimagewidget.h
-# src/iDescriptor-ui.h
-# src/infolabel.cpp
-# src/infolabel.h
-# src/privateinfolabel.cpp
-# src/privateinfolabel.h
-# src/qprocessindicator.cpp
-# src/qprocessindicator.h
-# src/diagnosewidget.cpp
-# src/diagnosewidget.h
-# src/core/services/get-device-info.cpp
-# src/deviceimagewidget.cpp
-# src/deviceimagewidget.h
-# src/settingsmanager.cpp
-# src/settingsmanager.h
-# # src/fileexplorerwidget.cpp
-# # src/fileexplorerwidget.h
-# src/settingswidget.cpp
-# src/settingswidget.h
-# src/ifusemanager.cpp
-# src/ifusemanager.h
-# src/ifusediskunmountbutton.cpp
-# src/ifusediskunmountbutton.h
-# src/core/services/get_battery_info.cpp
-# src/networkdeviceswidget.cpp
-# src/core/services/avahi/avahi_service.h
-# src/core/services/avahi/avahi_service.cpp
-# src/networkdevicemanager.cpp
-# src/networkdevicemanager.h
-# src/*.ui
+src/base/*.cpp
+src/base/*.h
 resources.qrc
-# src/gallerywidget.cpp
-# src/gallerywidget.h
-# src/photomodel.cpp
-# src/photomodel.h
-# src/core/services/load_heic.cpp
-# src/servicemanager.cpp
-# src/servicemanager.h
-# src/core/services/get_file_tree.cpp
-# src/core/helpers/read_afc_file_to_byte_array.cpp
-# src/heartbeat.h
-# src/zloadingwidget.h
-# src/zloadingwidget.cpp
-# src/mediapreviewdialog.h
-# src/mediapreviewdialog.cpp
-# src/mediastreamer.h
-# src/mediastreamer.cpp
-# src/mediastreamermanager.h
-# src/mediastreamermanager.cpp
-# src/querymobilegestaltwidget.h
-# src/querymobilegestaltwidget.cpp
-# src/core/services/mount_dev_image.cpp
-# src/core/services/get_mounted_image.cpp
-# src/devdiskimageswidget.h
-# src/devdiskimageswidget.cpp
-# src/devdiskmanager.h
-# src/devdiskmanager.cpp
-# src/core/helpers/mounted_image_info_free.cpp
-# src/core/services/get_cable_info.cpp
-# src/cableinfowidget.h
-# src/cableinfowidget.cpp
-# src/livescreenwidget.h
-# src/livescreenwidget.cpp
-# src/virtuallocationwidget.h
-# src/virtuallocationwidget.cpp
 )
 
 if(APPLE)
     list(APPEND PROJECT_SOURCES
-        src/platform/macos.mm
+        src/platform/macos/macos.mm
         src/core/services/dnssd/dnssd_service.cpp
         src/core/services/dnssd/dnssd_service.h
     )
