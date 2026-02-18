@@ -20,6 +20,7 @@
 #ifndef WIRELESSGALLERYIMPORTWIDGET_H
 #define WIRELESSGALLERYIMPORTWIDGET_H
 
+#include "iDescriptor-ui.h"
 #include "qprocessindicator.h"
 #include <QHBoxLayout>
 #include <QLabel>
@@ -32,7 +33,7 @@
 #include <QVideoWidget>
 #include <QWidget>
 
-class WirelessGalleryImportWidget : public QWidget
+class WirelessGalleryImportWidget : public Tool
 {
     Q_OBJECT
 

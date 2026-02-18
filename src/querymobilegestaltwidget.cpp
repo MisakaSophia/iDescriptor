@@ -28,7 +28,7 @@
 
 QueryMobileGestaltWidget::QueryMobileGestaltWidget(iDescriptorDevice *device,
                                                    QWidget *parent)
-    : QWidget(parent), m_device(device)
+    : Tool(parent), m_device(device)
 {
     // FIXME: not tested on iOS 17,18 but it's deprecated on iOS 26
     // i am assuming it won't work

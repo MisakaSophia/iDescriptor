@@ -17,36 +17,23 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef INFOLABEL_H
-#define INFOLABEL_H
+#pragma once
+#include <QMainWindow>
+#include <QPoint>
+#include <QString>
+#include <QWidget>
 
-#include <QLabel>
-#include <QTimer>
-
-class InfoLabel : public QLabel
-{
-    Q_OBJECT
-
-public:
-    explicit InfoLabel(const QString &text = QString(),
-                       const QString &textToCopy = QString(),
-                       QWidget *parent = nullptr);
-
-    void setOriginalText(const QString &text);
-    void setTextToCopy(const QString &textToCopy);
-
-protected:
-    void mousePressEvent(QMouseEvent *event) override;
-    void enterEvent(QEnterEvent *event) override;
-    void leaveEvent(QEvent *event) override;
-
-private slots:
-    void restoreOriginalText();
-
-private:
-    QString m_originalText;
-    QString m_textToCopy;
-    QTimer *m_restoreTimer;
+struct UsageInfo {
+    QString type;
+    QString formattedSize;
+    QString color;
+    double percentage;
 };
 
-#endif // INFOLABEL_H
+void setupMacOSWindow(QMainWindow *window);
+
+void showPopoverForBarWidget(QWidget *widget, const UsageInfo &info);
+
+void hidePopoverForBarWidget();
+
+void setupToolFrame(QWidget *parent);

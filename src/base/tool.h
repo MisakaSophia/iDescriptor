@@ -17,36 +17,19 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef INFOLABEL_H
-#define INFOLABEL_H
+#ifndef TOOL_H
+#define TOOL_H
 
-#include <QLabel>
-#include <QTimer>
+#include <QWidget>
 
-class InfoLabel : public QLabel
+#ifdef __APPLE__
+#include "../platform/macos/macos.h"
+#endif
+
+class Tool : public QWidget
 {
-    Q_OBJECT
-
 public:
-    explicit InfoLabel(const QString &text = QString(),
-                       const QString &textToCopy = QString(),
-                       QWidget *parent = nullptr);
-
-    void setOriginalText(const QString &text);
-    void setTextToCopy(const QString &textToCopy);
-
-protected:
-    void mousePressEvent(QMouseEvent *event) override;
-    void enterEvent(QEnterEvent *event) override;
-    void leaveEvent(QEvent *event) override;
-
-private slots:
-    void restoreOriginalText();
-
-private:
-    QString m_originalText;
-    QString m_textToCopy;
-    QTimer *m_restoreTimer;
+    explicit Tool(QWidget *parent = nullptr);
 };
 
-#endif // INFOLABEL_H
+#endif // TOOL_H

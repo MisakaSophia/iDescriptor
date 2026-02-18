@@ -19,7 +19,7 @@
 
 #ifdef __APPLE__
 #include "diskusagebar.h"
-#include "platform/macos.h"
+#include "platform/macos/macos.h"
 
 #include <QEnterEvent>
 #include <QHBoxLayout>

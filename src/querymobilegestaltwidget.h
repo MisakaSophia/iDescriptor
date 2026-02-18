@@ -20,6 +20,7 @@
 #ifndef QUERYMOBILEGESTALTWIDGET_H
 #define QUERYMOBILEGESTALTWIDGET_H
 
+#include "iDescriptor-ui.h"
 #include "iDescriptor.h"
 #include <QCheckBox>
 #include <QComboBox>
@@ -36,7 +37,7 @@
 #include <QVariant>
 #include <QWidget>
 
-class QueryMobileGestaltWidget : public QWidget
+class QueryMobileGestaltWidget : public Tool
 {
     Q_OBJECT
 

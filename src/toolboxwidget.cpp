@@ -18,7 +18,7 @@
  */
 
 #include "toolboxwidget.h"
-#include "airplaywindow.h"
+#include "airplaywidget.h"
 #include "appcontext.h"
 #include "cableinfowidget.h"
 #include "devdiskimageswidget.h"
@@ -411,17 +411,17 @@ void ToolboxWidget::onToolboxClicked(iDescriptorTool tool, bool requiresDevice)
     qDebug() << "idevice exists:" << (device != nullptr) << m_uuid.c_str();
     switch (tool) {
     case iDescriptorTool::Airplayer: {
-        if (!m_airplayWindow) {
-            m_airplayWindow = new AirPlayWindow();
-            connect(m_airplayWindow, &QObject::destroyed, this,
-                    [this]() { m_airplayWindow = nullptr; });
-            m_airplayWindow->setAttribute(Qt::WA_DeleteOnClose);
-            m_airplayWindow->setWindowFlag(Qt::Window);
-            m_airplayWindow->resize(400, 300);
-            m_airplayWindow->show();
+        if (!m_airplayWidget) {
+            m_airplayWidget = new AirPlayWidget();
+            connect(m_airplayWidget, &QObject::destroyed, this,
+                    [this]() { m_airplayWidget = nullptr; });
+            m_airplayWidget->setAttribute(Qt::WA_DeleteOnClose);
+            m_airplayWidget->setWindowFlag(Qt::Window);
+            m_airplayWidget->resize(400, 300);
+            m_airplayWidget->show();
         } else {
-            m_airplayWindow->raise();
-            m_airplayWindow->activateWindow();
+            m_airplayWidget->raise();
+            m_airplayWidget->activateWindow();
         }
     } break;
 
@@ -462,11 +462,8 @@ void ToolboxWidget::onToolboxClicked(iDescriptorTool tool, bool requiresDevice)
         devDiskImageHelper->start();
     } break;
     case iDescriptorTool::VirtualLocation: {
-        // Handle virtual location functionality
         VirtualLocation *virtualLocation = new VirtualLocation(device);
         virtualLocation->setAttribute(Qt::WA_DeleteOnClose);
-        virtualLocation->setWindowFlag(Qt::Window);
-        virtualLocation->resize(800, 600);
         virtualLocation->show();
     } break;
     case iDescriptorTool::Restart: {
@@ -476,20 +473,15 @@ void ToolboxWidget::onToolboxClicked(iDescriptorTool tool, bool requiresDevice)
         shutdownDevice(device);
     } break;
     case iDescriptorTool::QueryMobileGestalt: {
-        // Handle querying MobileGestalt
         QueryMobileGestaltWidget *queryMobileGestaltWidget =
             new QueryMobileGestaltWidget(device);
         queryMobileGestaltWidget->setAttribute(Qt::WA_DeleteOnClose);
-        queryMobileGestaltWidget->setWindowFlag(Qt::Window);
-        queryMobileGestaltWidget->resize(800, 600);
         queryMobileGestaltWidget->show();
     } break;
     case iDescriptorTool::DeveloperDiskImages: {
         if (!m_devDiskImagesWidget) {
             m_devDiskImagesWidget = new DevDiskImagesWidget(device);
             m_devDiskImagesWidget->setAttribute(Qt::WA_DeleteOnClose);
-            m_devDiskImagesWidget->setWindowFlag(Qt::Window);
-            m_devDiskImagesWidget->resize(800, 600);
             connect(m_devDiskImagesWidget, &QObject::destroyed, this,
                     [this]() { m_devDiskImagesWidget = nullptr; });
             m_devDiskImagesWidget->show();
@@ -504,8 +496,6 @@ void ToolboxWidget::onToolboxClicked(iDescriptorTool tool, bool requiresDevice)
             connect(m_wirelessGalleryImportWidget, &QObject::destroyed, this,
                     [this]() { m_wirelessGalleryImportWidget = nullptr; });
             m_wirelessGalleryImportWidget->setAttribute(Qt::WA_DeleteOnClose);
-            m_wirelessGalleryImportWidget->setWindowFlag(Qt::Window);
-            // m_wirelessGalleryImportWidget->resize(800, 600);
             m_wirelessGalleryImportWidget->show();
         } else {
             m_wirelessGalleryImportWidget->raise();
@@ -533,7 +523,6 @@ void ToolboxWidget::onToolboxClicked(iDescriptorTool tool, bool requiresDevice)
     case iDescriptorTool::CableInfoWidget: {
         CableInfoWidget *cableInfoWidget = new CableInfoWidget(device);
         cableInfoWidget->setAttribute(Qt::WA_DeleteOnClose);
-        cableInfoWidget->setWindowFlag(Qt::Window);
         cableInfoWidget->resize(600, 400);
         cableInfoWidget->show();
     } break;
@@ -541,8 +530,6 @@ void ToolboxWidget::onToolboxClicked(iDescriptorTool tool, bool requiresDevice)
         if (!m_networkDevicesWidget) {
             m_networkDevicesWidget = new NetworkDevicesWidget();
             m_networkDevicesWidget->setAttribute(Qt::WA_DeleteOnClose);
-            m_networkDevicesWidget->setWindowFlag(Qt::Window);
-            m_networkDevicesWidget->resize(500, 600);
             connect(m_networkDevicesWidget, &QObject::destroyed, this,
                     [this]() { m_networkDevicesWidget = nullptr; });
             m_networkDevicesWidget->show();
@@ -647,15 +634,15 @@ void ToolboxWidget::_enterRecoveryMode(iDescriptorDevice *device)
     // }
 }
 
-void ToolboxWidget::restartAirPlayWindow()
+void ToolboxWidget::restartAirPlayWidget()
 {
-    if (!m_airplayWindow) {
+    if (!m_airplayWidget) {
         onToolboxClicked(iDescriptorTool::Airplayer, false);
         return;
     }
 
     connect(
-        m_airplayWindow, &QObject::destroyed, this,
+        m_airplayWidget, &QObject::destroyed, this,
         [this]() {
             // give some time for cleanup
             QTimer::singleShot(100, this, [this]() {
@@ -664,5 +651,5 @@ void ToolboxWidget::restartAirPlayWindow()
         },
         Qt::SingleShotConnection);
 
-    m_airplayWindow->close();
+    m_airplayWidget->close();
 }

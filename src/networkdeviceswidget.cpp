@@ -18,7 +18,6 @@
  */
 
 #include "networkdeviceswidget.h"
-
 #ifdef __linux__
 #include "core/services/avahi/avahi_service.h"
 #else
@@ -31,11 +30,12 @@
 #include <QLabel>
 #include <QPalette>
 
-NetworkDevicesWidget::NetworkDevicesWidget(QWidget *parent) : QWidget(parent)
+NetworkDevicesWidget::NetworkDevicesWidget(QWidget *parent) : Tool(parent)
 {
     setWindowTitle("Network Devices - iDescriptor");
+    resize(500, 600);
+    setMinimumSize(400, 300);
     setupUI();
-
 #ifdef __linux__
     m_networkProvider = new AvahiService(this);
     connect(m_networkProvider, &AvahiService::deviceAdded, this,
@@ -55,6 +55,7 @@ NetworkDevicesWidget::NetworkDevicesWidget(QWidget *parent) : QWidget(parent)
 
     // Initial device list update
     updateDeviceList();
+    setMaximumHeight(sizeHint().height());
 }
 
 NetworkDevicesWidget::~NetworkDevicesWidget()

@@ -36,8 +36,10 @@
 #include <QWheelEvent>
 #include <QWidget>
 
+#include "./base/tool.h"
+
 #ifdef __APPLE__
-#include "./platform/macos.h"
+#include "./platform/macos/macos.h"
 #endif
 
 #define COLOR_GREEN QColor(0, 180, 0)    // Green

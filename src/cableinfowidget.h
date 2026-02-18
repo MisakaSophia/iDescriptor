@@ -20,6 +20,7 @@
 #ifndef CABLEINFOWIDGET_H
 #define CABLEINFOWIDGET_H
 
+#include "iDescriptor-ui.h"
 #include "iDescriptor.h"
 #include "zloadingwidget.h"
 #include <QGridLayout>
@@ -31,7 +32,7 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
-class CableInfoWidget : public QWidget
+class CableInfoWidget : public Tool
 {
     Q_OBJECT
 

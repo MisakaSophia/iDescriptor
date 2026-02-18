@@ -26,6 +26,7 @@
 #include "core/services/dnssd/dnssd_service.h"
 #endif
 
+#include "iDescriptor-ui.h"
 #include <QEvent>
 #include <QGroupBox>
 #include <QLabel>
@@ -33,7 +34,7 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
-class NetworkDevicesWidget : public QWidget
+class NetworkDevicesWidget : public Tool
 {
     Q_OBJECT
 

@@ -46,7 +46,7 @@ public:
         ball_rotate,
     };
 
-    void paintEvent(QPaintEvent *e);
+    void paintEvent(QPaintEvent *e) override;
 
     void start();
     void stop();

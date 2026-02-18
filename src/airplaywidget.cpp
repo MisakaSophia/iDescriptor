@@ -17,7 +17,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "airplaywindow.h"
+#include "airplaywidget.h"
 #include <QApplication>
 #include <QCheckBox>
 #include <QCloseEvent>
@@ -137,8 +137,8 @@ AirPlaySettings AirPlaySettingsDialog::getSettings() const
     return settings;
 }
 
-AirPlayWindow::AirPlayWindow(QWidget *parent)
-    : QMainWindow(parent), m_stackedWidget(nullptr), m_tutorialWidget(nullptr),
+AirPlayWidget::AirPlayWidget(QWidget *parent)
+    : Tool(parent), m_stackedWidget(nullptr), m_tutorialWidget(nullptr),
       m_streamingWidget(nullptr), m_loadingIndicator(nullptr),
       m_loadingLabel(nullptr), m_tutorialPlayer(nullptr),
       m_tutorialVideoWidget(nullptr), m_videoLabel(nullptr),
@@ -167,14 +167,14 @@ AirPlayWindow::AirPlayWindow(QWidget *parent)
 
         DiagnoseDialog *diagnoseDialog = new DiagnoseDialog();
         diagnoseDialog->show();
-        QTimer::singleShot(0, this, &AirPlayWindow::close);
+        QTimer::singleShot(0, this, &AirPlayWidget::close);
         return;
     }
 #endif
-    QTimer::singleShot(500, this, &AirPlayWindow::startAirPlayServer);
+    QTimer::singleShot(500, this, &AirPlayWidget::startAirPlayServer);
 }
 
-AirPlayWindow::~AirPlayWindow()
+AirPlayWidget::~AirPlayWidget()
 {
     stopAirPlayServer();
 #ifdef Q_OS_LINUX
@@ -182,13 +182,11 @@ AirPlayWindow::~AirPlayWindow()
 #endif
 }
 
-void AirPlayWindow::setupUI()
+void AirPlayWidget::setupUI()
 {
-    setWindowTitle("AirPlay Receiver - iDescriptor");
+    setWindowTitle("AirPlay - iDescriptor");
 
-    // Create stacked widget
     m_stackedWidget = new QStackedWidget(this);
-    setCentralWidget(m_stackedWidget);
 
     m_tutorialWidget = new QWidget();
     m_tutorialLayout = new QVBoxLayout(m_tutorialWidget);
@@ -216,14 +214,14 @@ void AirPlayWindow::setupUI()
     m_settingsButton = new QPushButton("Settings");
     m_settingsButton->setVisible(false);
     connect(m_settingsButton, &QPushButton::clicked, this,
-            &AirPlayWindow::showSettingsDialog);
+            &AirPlayWidget::showSettingsDialog);
     QHBoxLayout *settingsLayout = new QHBoxLayout();
     settingsLayout->addStretch();
     settingsLayout->addWidget(m_settingsButton);
     settingsLayout->addStretch();
     m_tutorialLayout->addLayout(settingsLayout);
 
-    QTimer::singleShot(100, this, &AirPlayWindow::setupTutorialVideo);
+    QTimer::singleShot(100, this, &AirPlayWidget::setupTutorialVideo);
 
     m_streamingWidget = new QWidget();
     QVBoxLayout *streamingLayout = new QVBoxLayout(m_streamingWidget);
@@ -250,13 +248,14 @@ void AirPlayWindow::setupUI()
 
     // Start with tutorial widget
     m_stackedWidget->setCurrentWidget(m_tutorialWidget);
+    layout()->addWidget(m_stackedWidget);
 
 #ifdef __linux__
     m_v4l2_enabled = false; // Disable V4L2 by default
 #endif
 }
 
-void AirPlayWindow::setupTutorialVideo()
+void AirPlayWidget::setupTutorialVideo()
 {
     m_tutorialPlayer = new QMediaPlayer(this);
     m_tutorialVideoWidget = new QVideoWidget();
@@ -289,7 +288,7 @@ void AirPlayWindow::setupTutorialVideo()
     m_tutorialLayout->addWidget(m_tutorialVideoWidget, 1);
 }
 
-void AirPlayWindow::showTutorialView()
+void AirPlayWidget::showTutorialView()
 {
     m_stackedWidget->setCurrentWidget(m_tutorialWidget);
     if (m_tutorialPlayer) {
@@ -298,7 +297,7 @@ void AirPlayWindow::showTutorialView()
     }
 }
 
-void AirPlayWindow::showStreamingView()
+void AirPlayWidget::showStreamingView()
 {
     m_loadingIndicator->stop();
     m_stackedWidget->setCurrentWidget(m_streamingWidget);
@@ -307,7 +306,7 @@ void AirPlayWindow::showStreamingView()
     }
 }
 
-void AirPlayWindow::showSettingsDialog()
+void AirPlayWidget::showSettingsDialog()
 {
     AirPlaySettingsDialog dialog(this);
     if (dialog.exec() == QDialog::Accepted) {
@@ -316,26 +315,26 @@ void AirPlayWindow::showSettingsDialog()
         // Save settings
         SettingsManager::sharedInstance()->setAirplayFps(newSettings.fps);
         SettingsManager::sharedInstance()->setAirplayNoHold(newSettings.noHold);
-       
+
         QMessageBox::information(this, "Settings Saved",
                                  "AirPlay will be restarted to apply the new "
                                  "settings.");
-        ToolboxWidget::sharedInstance()->restartAirPlayWindow();
+        ToolboxWidget::sharedInstance()->restartAirPlayWidget();
     }
 }
 
-void AirPlayWindow::startAirPlayServer()
+void AirPlayWidget::startAirPlayServer()
 {
     if (m_serverRunning)
         return;
 
     m_serverThread = new AirPlayServerThread(this);
     connect(m_serverThread, &AirPlayServerThread::statusChanged, this,
-            &AirPlayWindow::onServerStatusChanged);
+            &AirPlayWidget::onServerStatusChanged);
     connect(m_serverThread, &AirPlayServerThread::videoFrameReady, this,
-            &AirPlayWindow::updateVideoFrame);
+            &AirPlayWidget::updateVideoFrame);
     connect(m_serverThread, &AirPlayServerThread::clientConnectionChanged, this,
-            &AirPlayWindow::onClientConnectionChanged);
+            &AirPlayWidget::onClientConnectionChanged);
     connect(m_serverThread, &AirPlayServerThread::errorOccurred, this,
             [this](const QString &message) {
                 QMessageBox::critical(this, "AirPlay Server Error", message);
@@ -347,7 +346,7 @@ void AirPlayWindow::startAirPlayServer()
     m_serverThread->start();
 }
 
-void AirPlayWindow::stopAirPlayServer()
+void AirPlayWidget::stopAirPlayServer()
 {
     if (m_serverThread) {
         m_serverThread->quit();
@@ -357,7 +356,7 @@ void AirPlayWindow::stopAirPlayServer()
     m_serverRunning = false;
 }
 
-void AirPlayWindow::updateVideoFrame(QByteArray frameData, int width,
+void AirPlayWidget::updateVideoFrame(QByteArray frameData, int width,
                                      int height)
 {
     if (frameData.size() != width * height * 3) {
@@ -386,7 +385,7 @@ void AirPlayWindow::updateVideoFrame(QByteArray frameData, int width,
     m_videoLabel->setPixmap(scaledPixmap);
 }
 
-void AirPlayWindow::onServerStatusChanged(bool running)
+void AirPlayWidget::onServerStatusChanged(bool running)
 {
     m_serverRunning = running;
 
@@ -420,7 +419,7 @@ void AirPlayWindow::onServerStatusChanged(bool running)
     }
 }
 
-void AirPlayWindow::onClientConnectionChanged(bool connected)
+void AirPlayWidget::onClientConnectionChanged(bool connected)
 {
     m_clientConnected = connected;
 
@@ -439,7 +438,7 @@ void AirPlayWindow::onClientConnectionChanged(bool connected)
 }
 #ifdef __linux__
 
-void AirPlayWindow::onV4L2CheckboxToggled(bool enabled)
+void AirPlayWidget::onV4L2CheckboxToggled(bool enabled)
 {
     if (enabled) {
         // Check if V4L2 loopback exists
@@ -566,7 +565,7 @@ void AirPlayServerThread::run()
 
 #ifdef __linux__
 // V4L2 Implementation
-void AirPlayWindow::initV4L2(int width, int height, const char *device)
+void AirPlayWidget::initV4L2(int width, int height, const char *device)
 {
     closeV4L2(); // Close previous device if any
 
@@ -598,7 +597,7 @@ void AirPlayWindow::initV4L2(int width, int height, const char *device)
     qDebug("V4L2 device %s initialized to %dx%d", device, width, height);
 }
 
-void AirPlayWindow::closeV4L2()
+void AirPlayWidget::closeV4L2()
 {
     if (m_v4l2_fd >= 0) {
         ::close(m_v4l2_fd);
@@ -606,7 +605,7 @@ void AirPlayWindow::closeV4L2()
     }
 }
 
-void AirPlayWindow::writeFrameToV4L2(uint8_t *data, int width, int height)
+void AirPlayWidget::writeFrameToV4L2(uint8_t *data, int width, int height)
 {
     // Check if V4L2 device needs to be initialized or re-initialized
     if (m_v4l2_fd < 0 || m_v4l2_width != width || m_v4l2_height != height) {
@@ -625,7 +624,7 @@ void AirPlayWindow::writeFrameToV4L2(uint8_t *data, int width, int height)
     }
 }
 
-bool AirPlayWindow::checkV4L2LoopbackExists()
+bool AirPlayWidget::checkV4L2LoopbackExists()
 {
     try {
         QFileInfo videoDevice("/dev/video0");
@@ -636,7 +635,7 @@ bool AirPlayWindow::checkV4L2LoopbackExists()
     }
 }
 
-bool AirPlayWindow::createV4L2Loopback()
+bool AirPlayWidget::createV4L2Loopback()
 {
     try {
         QProcess process;
@@ -680,7 +679,7 @@ bool AirPlayWindow::createV4L2Loopback()
     }
 }
 
-void AirPlayWindow::setupV4L2Checkbox()
+void AirPlayWidget::setupV4L2Checkbox()
 {
     if (!SettingsManager::sharedInstance()->showV4L2())
         return;
@@ -692,7 +691,7 @@ void AirPlayWindow::setupV4L2Checkbox()
         m_v4l2Checkbox->setChecked(false);
 
         connect(m_v4l2Checkbox, &QCheckBox::toggled, this,
-                &AirPlayWindow::onV4L2CheckboxToggled);
+                &AirPlayWidget::onV4L2CheckboxToggled);
 
     } catch (...) {
         qWarning("Exception occurred while setting up V4L2 checkbox");

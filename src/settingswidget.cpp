@@ -58,6 +58,7 @@ void SettingsWidget::setupUI()
     auto *scrollArea = new QScrollArea();
     auto *scrollWidget = new QWidget();
     auto *scrollLayout = new QVBoxLayout(scrollWidget);
+    scrollLayout->setSpacing(35);
     scrollLayout->setContentsMargins(10, 10, 10, 10);
 
     // === GENERAL SETTINGS ===

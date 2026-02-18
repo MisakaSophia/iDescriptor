@@ -17,20 +17,11 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include <QMainWindow>
-#include <QPoint>
-#include <QString>
-#include <QWidget>
+#include "tool.h"
 
-struct UsageInfo {
-    QString type;
-    QString formattedSize;
-    QString color;
-    double percentage;
-};
-
-void setupMacOSWindow(QMainWindow *window);
-
-void showPopoverForBarWidget(QWidget *widget, const UsageInfo &info);
-
-void hidePopoverForBarWidget();
+Tool::Tool(QWidget *parent) : QWidget(parent)
+{
+#ifdef __APPLE__
+    setupToolFrame(this);
+#endif
+}

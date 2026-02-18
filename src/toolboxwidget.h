@@ -20,7 +20,7 @@
 #ifndef TOOLBOXWIDGET_H
 #define TOOLBOXWIDGET_H
 
-#include "airplaywindow.h"
+#include "airplaywidget.h"
 #include "devdiskimageswidget.h"
 #include "devicesidebarwidget.h"
 #include "iDescriptor-ui.h"
@@ -48,7 +48,7 @@ public:
     static void shutdownDevice(iDescriptorDevice *device);
     static void _enterRecoveryMode(iDescriptorDevice *device);
     static ToolboxWidget *sharedInstance();
-    void restartAirPlayWindow();
+    void restartAirPlayWidget();
 private slots:
     void onDeviceSelectionChanged();
     void onToolboxClicked(iDescriptorTool tool, bool requiresDevice);
@@ -71,7 +71,7 @@ private:
     std::string m_uuid;
     DevDiskImagesWidget *m_devDiskImagesWidget = nullptr;
     NetworkDevicesWidget *m_networkDevicesWidget = nullptr;
-    AirPlayWindow *m_airplayWindow = nullptr;
+    AirPlayWidget *m_airplayWidget = nullptr;
 #ifndef __APPLE__
     iFuseWidget *m_ifuseWidget = nullptr;
 #endif

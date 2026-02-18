@@ -191,3 +191,100 @@ void showPopoverForBarWidget(QWidget *widget, const UsageInfo &info)
     s_popover = [popover retain];
     s_viewController = [viewController retain];
 }
+
+// taken from
+// https://github.com/tauri-apps/tao/blob/3c2b4447aa53151ae96d30a60928d1d71e9bb5fc/src/platform_impl/macos/view.rs#L1154
+void setTrafficLightInset(NSPoint position, NSWindow *window)
+{
+    CGFloat x = position.x;
+    CGFloat y = position.y;
+
+    NSButton *closeButton = [window standardWindowButton:NSWindowCloseButton];
+    NSButton *miniaturizeButton =
+        [window standardWindowButton:NSWindowMiniaturizeButton];
+    NSButton *zoomButton = [window standardWindowButton:NSWindowZoomButton];
+
+    NSView *titleBarContainer = closeButton.superview.superview;
+
+    NSRect closeRect = closeButton.frame;
+    CGFloat titleBarFrameHeight = closeRect.size.height + y;
+    NSRect titleBarRect = titleBarContainer.frame;
+    titleBarRect.size.height = titleBarFrameHeight;
+    titleBarRect.origin.y = window.frame.size.height - titleBarFrameHeight;
+    [titleBarContainer setFrame:titleBarRect];
+
+    CGFloat spaceBetween = NSMinX(miniaturizeButton.frame) - NSMinX(closeRect);
+    NSArray<NSButton *> *buttons =
+        @[ closeButton, miniaturizeButton, zoomButton ];
+
+    for (NSUInteger i = 0; i < buttons.count; i++) {
+        NSButton *button = buttons[i];
+        NSRect rect = button.frame;
+        rect.origin.x = x + (i * spaceBetween);
+        [button setFrameOrigin:rect.origin];
+    }
+}
+
+void setupToolFrame(QWidget *toolFrame)
+{
+    if (!toolFrame) {
+        qWarning() << "setupToolFrame: toolFrame is null";
+        return;
+    }
+
+    NSView *nativeView = reinterpret_cast<NSView *>(toolFrame->winId());
+    if (!nativeView) {
+        qWarning() << "setupToolFrame: native view is null";
+        return;
+    }
+
+    NSWindow *window = [nativeView window];
+    if (!window) {
+        qWarning() << "setupToolFrame: native window is null";
+        return;
+    }
+
+    // Doesn't work, need to figure out a better way, we need to remove
+    // fullscreen button NSWindowStyleMask mask = [window styleMask]; mask &=
+    // ~NSWindowStyleMaskClosable; mask &= ~NSWindowStyleMaskMiniaturizable;
+    // mask &= ~NSWindowStyleMaskFullScreen;
+    // [window setStyleMask:mask];
+
+    NSRect windowFrame = [[window contentView] frame];
+
+    // NSEdgeInsets insets = NSEdgeInsetsMake(20, 15, 0, 0);
+    // // macOS 12.0+ uses a single inset point; adjust as needed for your
+    // target if (@available(macOS 12.0, *)) {
+    //     [window setTrafficLightInset:NSMakePoint(15, 20)];
+    // } else {
+    //     [window setTrafficLightInsets:insets];
+    // }
+
+    // Works but resizing messes up the styles
+    // dispatch_async(dispatch_get_main_queue(), ^{
+    //   setTrafficLightInset(NSMakePoint(20, 25), window);
+    // // x = horizontal inset from left, y = extra height added to title bar
+    // setTrafficLightInset(NSMakePoint(35.0, 44.0), window);
+    // });
+
+    NSToolbar *toolbar =
+        [[NSToolbar alloc] initWithIdentifier:@"HiddenInsetToolbar"];
+    toolbar.showsBaselineSeparator =
+        NO; // equivalent to HideToolbarSeparator: true
+    [window setToolbar:toolbar];
+    [window setBackgroundColor:[NSColor colorWithWhite:0.95 alpha:1.0]];
+    // [toolbar setVisible:NO];
+    // todo : is it ok ?
+    [toolbar release];
+    // TODO: theming
+    [window setBackgroundColor:[NSColor colorWithWhite:0.95 alpha:1.0]];
+
+    // NSButton *closeBtn = [window standardWindowButton:NSWindowCloseButton];
+    // if (closeBtn) {
+    //         qDebug() << "Hiding close button";
+    //     [closeBtn setHidden:YES]; }
+    //   // NSButton *miniBtn = [window
+    // standardWindowButton:NSWindowMiniaturizeButton]; if (miniBtn) {
+    //         qDebug() << "Hiding minimize button";
+    //     [miniBtn setHidden:YES]// ; }
+}

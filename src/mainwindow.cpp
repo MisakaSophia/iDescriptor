@@ -435,11 +435,19 @@ MainWindow::MainWindow(QWidget *parent)
     connect(NetworkDeviceManager::sharedInstance(),
             &NetworkDeviceManager::deviceAdded, this,
             [this](const NetworkDevice &device) {
-                // return; // FIXME: disable for now
-                if (AppContext::sharedInstance()->getDeviceByMacAddress(
-                        device.macAddress)) {
-                    qDebug() << "Prefering wired connection on device MAC:"
-                             << device.macAddress;
+                if (auto existingDevice =
+                        AppContext::sharedInstance()->getDeviceByMacAddress(
+                            device.macAddress)) {
+                    if (existingDevice->deviceInfo.isWireless) {
+                        qDebug() << "Ignoring wireless device with MAC:"
+                                 << device.macAddress
+                                 << "as it's already initialized";
+
+                    } else {
+                        qDebug() << "Prefering wired connection on device MAC:"
+                                 << device.macAddress;
+                    }
+
                     return;
                 }
                 qDebug() << "Trying to add network device with MAC:"

@@ -29,7 +29,7 @@
 #include <QTimer>
 
 WirelessGalleryImportWidget::WirelessGalleryImportWidget(QWidget *parent)
-    : QWidget(parent), m_scrollArea(nullptr), m_scrollContent(nullptr),
+    : Tool(parent), m_scrollArea(nullptr), m_scrollContent(nullptr),
       m_fileListLayout(nullptr), m_browseButton(nullptr),
       m_importButton(nullptr), m_statusLabel(nullptr)
 {

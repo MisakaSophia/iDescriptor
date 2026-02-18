@@ -42,11 +42,15 @@
 #include <QUrl>
 #include <QVBoxLayout>
 #include <QWidget>
-
+// FIXME: on macOS setupToolFrame in Tool widget does nothing
+// probably because we are using a QQuickWidget
 VirtualLocation::VirtualLocation(iDescriptorDevice *device, QWidget *parent)
-    : QWidget{parent}, m_device(device)
+    : Tool(parent), m_device(device)
 {
     setWindowTitle("Virtual Location - iDescriptor");
+    setMinimumSize(600, 400);
+    resize(800, 600);
+
     // Create the main layout
     QHBoxLayout *mainLayout = new QHBoxLayout(this);
     mainLayout->setContentsMargins(10, 10, 10, 10);
@@ -414,7 +418,7 @@ void VirtualLocation::onApplyClicked()
         if (err->code == ServiceNotFoundErrorCode) {
             auto res = QMessageBox::question(
                 this, "Enable Developer Mode?",
-                "Location Simulation service not found. Enable Developer "
+                "Location Simulation service is not found. Enable Developer "
                 "Mode on the device?",
                 QMessageBox::Yes | QMessageBox::No);
             if (res == QMessageBox::Yes) {

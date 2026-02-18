@@ -20,6 +20,7 @@
 #ifndef DEVDISKIMAGESWIDGET_H
 #define DEVDISKIMAGESWIDGET_H
 
+#include "iDescriptor-ui.h"
 #include "iDescriptor.h"
 #include "qprocessindicator.h"
 #include <QComboBox>
@@ -35,7 +36,7 @@
 #include <QWidget>
 #include <string>
 
-class DevDiskImagesWidget : public QWidget
+class DevDiskImagesWidget : public Tool
 {
     Q_OBJECT
 public:

@@ -51,10 +51,12 @@
 
 DevDiskImagesWidget::DevDiskImagesWidget(iDescriptorDevice *device,
                                          QWidget *parent)
-    : QWidget{parent},
+    : Tool(parent),
       m_currentDeviceUdid(
           device != nullptr ? QString::fromStdString(device->udid) : QString())
 {
+    setMinimumSize(400, 400);
+    resize(800, 600);
     setupUi();
     connect(DevDiskManager::sharedInstance(), &DevDiskManager::imageListFetched,
             this, &DevDiskImagesWidget::onImageListFetched);
@@ -204,13 +206,26 @@ void DevDiskImagesWidget::displayImages()
 
     qDebug() << "Total images:" << allImages.size();
 
+    int itemIndex = 0;
+
     // Create UI items
     auto createVersionItem = [&](const ImageInfo &info) {
         bool isCompatible =
             (info.compatibility == ImageCompatibility::Compatible ||
              info.compatibility == ImageCompatibility::MaybeCompatible);
         auto *itemWidget = new QWidget();
+        itemWidget->setObjectName("itemWidget");
         auto *itemLayout = new QHBoxLayout(itemWidget);
+
+        // TODO: maybe create a custom widget for this, if we ever need this
+        // elsewhere ?
+        QColor baseColor = QApplication::palette().color(QPalette::Window);
+        QColor bgColor =
+            itemIndex % 2 == 0 ? baseColor.lighter(110) : baseColor;
+        itemWidget->setStyleSheet(
+            QString("QWidget#itemWidget { background-color: %1; }")
+                .arg(bgColor.name()));
+        itemIndex++;
 
         auto *versionLabel = new QLabel(info.version);
         if (isCompatible) {
@@ -229,20 +244,20 @@ void DevDiskImagesWidget::displayImages()
         if (hasConnectedDevice) {
             if (isCompatible) {
                 if (info.isMounted) {
-                    auto *mountedLabel = new QLabel("✓ Mounted");
+                    auto *mountedLabel = new QLabel("Mounted");
                     mountedLabel->setStyleSheet(
                         "QLabel { color: #1565C0; font-weight: bold; }");
                     itemLayout->addWidget(mountedLabel);
                 } else if (info.compatibility ==
                            ImageCompatibility::MaybeCompatible) {
-                    auto *maybeLabel = new QLabel("⚠ Maybe compatible");
+                    auto *maybeLabel = new QLabel("Maybe compatible");
                     maybeLabel->setStyleSheet("QLabel { color: #F57C00; "
                                               "margin-left: 10px; font-weight: "
                                               "bold; }");
                     itemLayout->addWidget(maybeLabel);
                 }
             } else {
-                auto *incompatLabel = new QLabel("⚠ Not compatible");
+                auto *incompatLabel = new QLabel("Not compatible");
                 incompatLabel->setStyleSheet(
                     "QLabel { color: #D32F2F; margin-left: 10px; font-weight: "
                     "bold; }");

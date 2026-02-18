@@ -27,7 +27,7 @@
 #include <QTimer>
 
 CableInfoWidget::CableInfoWidget(iDescriptorDevice *device, QWidget *parent)
-    : QWidget(parent), m_device(device), m_response(nullptr)
+    : Tool(parent), m_device(device), m_response(nullptr)
 {
     setupUI();
     connect(AppContext::sharedInstance(), &AppContext::deviceRemoved, this,

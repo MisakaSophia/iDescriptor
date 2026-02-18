@@ -21,6 +21,7 @@
 #define VIRTUAL_LOCATION_H
 
 #include "devdiskimagehelper.h"
+#include "iDescriptor-ui.h"
 #include "iDescriptor.h"
 #include <QGroupBox>
 #include <QLineEdit>
@@ -30,7 +31,7 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
-class VirtualLocation : public QWidget
+class VirtualLocation : public Tool
 {
     Q_OBJECT
 

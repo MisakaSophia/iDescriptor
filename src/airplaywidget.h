@@ -17,9 +17,10 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef AIRPLAYWINDOW_H
-#define AIRPLAYWINDOW_H
+#ifndef AIRPLAYWIDGET_H
+#define AIRPLAYWIDGET_H
 
+#include "iDescriptor-ui.h"
 #include "qprocessindicator.h"
 #include <QCheckBox>
 #include <QCloseEvent>
@@ -93,13 +94,13 @@ private:
     AirPlaySettings m_settings;
 };
 
-class AirPlayWindow : public QMainWindow
+class AirPlayWidget : public Tool
 {
     Q_OBJECT
 
 public:
-    explicit AirPlayWindow(QWidget *parent = nullptr);
-    ~AirPlayWindow();
+    explicit AirPlayWidget(QWidget *parent = nullptr);
+    ~AirPlayWidget();
 
 private slots:
     void updateVideoFrame(QByteArray frameData, int width, int height);
@@ -154,4 +155,4 @@ private:
     AirPlaySettings m_settings;
 };
 
-#endif // AIRPLAYWINDOW_H
+#endif // AIRPLAYWIDGET_H
