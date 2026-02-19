@@ -41,8 +41,8 @@ void AvahiService::startBrowsing()
     initializeAvahi();
 
     if (m_simplePoll) {
-        m_pollTimer->start(100); // Poll every 100ms
         m_running = true;
+        m_pollTimer->start(100); // Poll every 100ms
     }
 }
 
