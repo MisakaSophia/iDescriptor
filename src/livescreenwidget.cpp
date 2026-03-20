@@ -23,11 +23,13 @@
 #include "devdiskmanager.h"
 #include "iDescriptor.h"
 #include <QDebug>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSpinBox>
 #include <QTimer>
+#include <QTransform>
 #include <QVBoxLayout>
 
 LiveScreenWidget::LiveScreenWidget(iDescriptorDevice *device, QWidget *parent)
@@ -73,6 +75,38 @@ LiveScreenWidget::LiveScreenWidget(iDescriptorDevice *device, QWidget *parent)
     m_imageLabel->setMinimumSize(300, 600);
     m_imageLabel->setAlignment(Qt::AlignCenter);
     mainLayout->addWidget(m_imageLabel, 1);
+
+    // Controls (rotate / mirror), initially hidden, shown when capturing starts
+    m_controlsWidget = new QWidget(this);
+    auto *controlsLayout = new QHBoxLayout(m_controlsWidget);
+    controlsLayout->setContentsMargins(0, 0, 0, 0);
+    controlsLayout->setSpacing(5);
+
+    m_rotateCwButton = new QPushButton("Rotate ↻", m_controlsWidget);
+    m_rotateCcwButton = new QPushButton("Rotate ↺", m_controlsWidget);
+    m_mirrorButton = new QPushButton("Mirror", m_controlsWidget);
+
+    controlsLayout->addWidget(m_rotateCwButton);
+    controlsLayout->addWidget(m_rotateCcwButton);
+    controlsLayout->addWidget(m_mirrorButton);
+    controlsLayout->addStretch(1);
+
+    m_controlsWidget->setVisible(false);
+    mainLayout->addWidget(m_controlsWidget);
+
+    // button actions
+    connect(m_rotateCwButton, &QPushButton::clicked, this, [this]() {
+        m_rotationDegrees = (m_rotationDegrees + 90) % 360;
+        applyTransformAndDisplay();
+    });
+    connect(m_rotateCcwButton, &QPushButton::clicked, this, [this]() {
+        m_rotationDegrees = (m_rotationDegrees + 270) % 360; // -90 mod 360
+        applyTransformAndDisplay();
+    });
+    connect(m_mirrorButton, &QPushButton::clicked, this, [this]() {
+        m_mirrorHorizontal = !m_mirrorHorizontal;
+        applyTransformAndDisplay();
+    });
 
     QTimer::singleShot(0, this, &LiveScreenWidget::startInitialization);
 }
@@ -132,6 +166,8 @@ bool LiveScreenWidget::initializeScreenshotService(bool notify)
         }
         // Successfully initialized, start capturing
         m_statusLabel->setText("Capturing");
+        if (m_controlsWidget)
+            m_controlsWidget->setVisible(true); // show rotation/mirror buttons
         startCapturing();
         return true;
     } catch (const std::exception &e) {
@@ -140,6 +176,7 @@ bool LiveScreenWidget::initializeScreenshotService(bool notify)
             QMessageBox::critical(
                 this, "Exception",
                 QString("Exception occurred: %1").arg(e.what()));
+        return false;
     }
 }
 
@@ -154,9 +191,36 @@ void LiveScreenWidget::startCapturing()
     m_thread = new ScreenshotrThread(m_screenshotrClient, m_device, this);
     connect(m_thread, &ScreenshotrThread::screenshotCaptured, this,
             [this](const QPixmap &pixmap) {
-                m_imageLabel->setPixmap(
-                    pixmap.scaled(m_imageLabel->size(), Qt::KeepAspectRatio,
-                                  Qt::SmoothTransformation));
+                // store raw pixmap and render with current rotation/mirror
+                m_lastPixmap = pixmap;
+                applyTransformAndDisplay();
             });
     m_thread->start();
+}
+
+void LiveScreenWidget::applyTransformAndDisplay()
+{
+    if (m_lastPixmap.isNull() || !m_imageLabel)
+        return;
+
+    QTransform transform;
+    transform.rotate(m_rotationDegrees);
+
+    QPixmap transformed =
+        m_lastPixmap.transformed(transform, Qt::SmoothTransformation);
+
+    if (m_mirrorHorizontal) {
+        QTransform mirrorTransform;
+        mirrorTransform.scale(-1, 1);
+        transformed =
+            transformed.transformed(mirrorTransform, Qt::SmoothTransformation);
+    }
+
+    const QSize targetSize = m_imageLabel->size();
+    if (!targetSize.isEmpty()) {
+        transformed = transformed.scaled(targetSize, Qt::KeepAspectRatio,
+                                         Qt::SmoothTransformation);
+    }
+
+    m_imageLabel->setPixmap(transformed);
 }

@@ -24,6 +24,7 @@
 #include "iDescriptor.h"
 #include "servicemanager.h"
 #include <QLabel>
+#include <QPushButton>
 #include <QThread>
 #include <QTimer>
 #include <QWidget>
@@ -85,12 +86,24 @@ private:
     bool initializeScreenshotService(bool notify);
     void updateScreenshot();
     void startCapturing();
+    void applyTransformAndDisplay();
 
     iDescriptorDevice *m_device;
     QLabel *m_imageLabel;
     QLabel *m_statusLabel;
     ScreenshotrClientHandle *m_screenshotrClient = nullptr;
     ScreenshotrThread *m_thread = nullptr;
+
+    // controls for rotation / mirroring
+    QWidget *m_controlsWidget = nullptr;
+    QPushButton *m_rotateCwButton = nullptr;
+    QPushButton *m_rotateCcwButton = nullptr;
+    QPushButton *m_mirrorButton = nullptr;
+
+    // transformation state
+    QPixmap m_lastPixmap;
+    int m_rotationDegrees = 0; // 0, 90, 180, 270
+    bool m_mirrorHorizontal = false;
 
 private:
     void startInitialization();
