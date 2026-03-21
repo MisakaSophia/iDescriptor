@@ -73,6 +73,30 @@ void handleCallbackRecovery(const irecv_device_event_t *event, void *userData)
 irecv_device_event_context_t context;
 #endif
 
+void handleCallback(const IdeviceEvent *e)
+{
+    QString udid = QString::fromUtf8(e->udid);
+    qDebug() << "Device event: "
+             << (e->kind == 1 ? "Connected" : "Disconnected")
+             << ", UDID: " << udid;
+    free(e->udid);
+    bool isConnected = (e->kind == 1);
+
+    if (isConnected) {
+        QMetaObject::invokeMethod(
+            AppContext::sharedInstance(), "addDevice", Qt::QueuedConnection,
+            Q_ARG(iDescriptor::Uniq, iDescriptor::Uniq(udid)),
+            Q_ARG(iDescriptor::IdeviceConnectionType,
+                  static_cast<iDescriptor::IdeviceConnectionType>(
+                      iDescriptor::CONNECTION_USB)),
+            Q_ARG(AddType, AddType::Regular));
+    } else {
+        QMetaObject::invokeMethod(
+            AppContext::sharedInstance(), "removeDevice", Qt::QueuedConnection,
+            Q_ARG(iDescriptor::Uniq, iDescriptor::Uniq(udid)));
+    }
+}
+
 MainWindow *MainWindow::sharedInstance()
 {
     static MainWindow instance;
@@ -333,65 +357,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
             m_updater->checkForUpdates();
         });
 
-    m_deviceMonitor = new DeviceMonitorThread(this);
-    connect(
-        m_deviceMonitor, &DeviceMonitorThread::deviceEvent, this,
-        [this](int event, const QString &udid, int conn_type, int addType) {
-            // Handle device connection
-            switch (event) {
-            case DeviceMonitorThread::IDEVICE_DEVICE_ADD: {
-                /* never gets fired on any platform */
-                if (conn_type == DeviceMonitorThread::CONNECTION_NETWORK) {
-                    return;
-                }
-                qDebug() << "Device event received: " << udid;
-
-                QMetaObject::invokeMethod(
-                    AppContext::sharedInstance(), "addDevice",
-                    Qt::QueuedConnection,
-                    Q_ARG(iDescriptor::Uniq, iDescriptor::Uniq(udid)),
-                    Q_ARG(
-                        DeviceMonitorThread::IdeviceConnectionType,
-                        static_cast<DeviceMonitorThread::IdeviceConnectionType>(
-                            conn_type)),
-                    Q_ARG(AddType, AddType::Regular));
-                break;
-            }
-
-            case DeviceMonitorThread::IDEVICE_DEVICE_REMOVE: {
-                QMetaObject::invokeMethod(
-                    AppContext::sharedInstance(), "removeDevice",
-                    Qt::QueuedConnection,
-                    Q_ARG(iDescriptor::Uniq, iDescriptor::Uniq(udid)));
-                break;
-            }
-
-            case DeviceMonitorThread::IDEVICE_DEVICE_PAIRED: {
-                /* never gets fired on any platform */
-                if (conn_type == DeviceMonitorThread::CONNECTION_NETWORK) {
-                    return;
-                }
-                qDebug() << "Device paired: " << udid;
-
-                QMetaObject::invokeMethod(
-                    AppContext::sharedInstance(), "addDevice",
-                    Qt::QueuedConnection, Q_ARG(QString, udid),
-                    Q_ARG(
-                        DeviceMonitorThread::IdeviceConnectionType,
-                        static_cast<DeviceMonitorThread::IdeviceConnectionType>(
-                            conn_type)),
-                    Q_ARG(AddType, AddType::Pairing));
-                break;
-            }
-            default:
-                qDebug() << "Unhandled event: " << event;
-            }
-        });
-
     /* If a device is connected before starting the app on slower machines ui
      * takes a lot of time to render so delay the monitoring a bit  */
     QTimer::singleShot(std::chrono::seconds(1), this,
-                       [this]() { m_deviceMonitor->start(); });
+                       [this]() { idevice_event_subscribe(handleCallback); });
 
     // ═══════════════════════════════════════════════════════════════════════
     //  Upgrade to wireless when a "WIRED" device is removed
@@ -404,11 +373,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
                 return;
             qDebug() << "Upgrading device to wireless connection for UDID"
                      << QString::fromStdString(udid);
+            // FIXME: ignore iOS 15 and lower
             QMetaObject::invokeMethod(
                 AppContext::sharedInstance(), "addDevice", Qt::QueuedConnection,
                 Q_ARG(iDescriptor::Uniq, iDescriptor::Uniq(udid, wasWireless)),
-                Q_ARG(DeviceMonitorThread::IdeviceConnectionType,
-                      DeviceMonitorThread::CONNECTION_NETWORK),
+                Q_ARG(iDescriptor::IdeviceConnectionType,
+                      iDescriptor::CONNECTION_NETWORK),
                 Q_ARG(AddType, AddType::UpgradeToWireless),
                 Q_ARG(QString, QString::fromStdString(wifiMacAddress)),
                 Q_ARG(QString, QString::fromStdString(ipAddress)));
@@ -420,6 +390,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     connect(NetworkDeviceProvider::sharedInstance(),
             &NetworkDeviceProvider::deviceAdded, this,
             [this](const NetworkDevice &device) {
+                if (!SettingsManager::sharedInstance()
+                         ->autoConnectWirelessDevices())
+                    return;
                 if (auto existingDevice =
                         AppContext::sharedInstance()->getDeviceByMacAddress(
                             device.macAddress)) {
@@ -442,8 +415,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
                     AppContext::sharedInstance(), "addDevice",
                     Q_ARG(iDescriptor::Uniq,
                           iDescriptor::Uniq(device.macAddress, true)),
-                    Q_ARG(DeviceMonitorThread::IdeviceConnectionType,
-                          DeviceMonitorThread::CONNECTION_NETWORK),
+                    Q_ARG(iDescriptor::IdeviceConnectionType,
+                          iDescriptor::CONNECTION_NETWORK),
                     Q_ARG(AddType, AddType::Wireless),
                     Q_ARG(QString, device.macAddress),
                     Q_ARG(QString, device.address));
@@ -528,9 +501,6 @@ MainWindow::~MainWindow()
 #ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
     irecv_device_event_unsubscribe(context);
 #endif
-    m_deviceMonitor->requestInterruption();
-    m_deviceMonitor->wait();
-    delete m_deviceMonitor;
     delete m_updater;
     // sleep(2);
 }

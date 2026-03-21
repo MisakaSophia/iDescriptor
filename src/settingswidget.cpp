@@ -156,6 +156,10 @@ void SettingsWidget::setupUI()
     m_switchToNewDevice = new QCheckBox("Switch to newly connected device");
     deviceLayout->addWidget(m_switchToNewDevice);
 
+    m_autoConnectWirelessDevices =
+        new QCheckBox("Automatically connect to wireless devices");
+    deviceLayout->addWidget(m_autoConnectWirelessDevices);
+
     // Connection timeout
     auto *timeoutLayout = new QHBoxLayout();
     timeoutLayout->addWidget(new QLabel("Connection Timeout:"));
@@ -302,6 +306,7 @@ void SettingsWidget::loadSettings()
     m_autoUpdateCheck->setChecked(sm->autoCheckUpdates());
     m_autoRaiseWindow->setChecked(sm->autoRaiseWindow());
     m_switchToNewDevice->setChecked(sm->switchToNewDevice());
+    m_autoConnectWirelessDevices->setChecked(sm->autoConnectWirelessDevices());
     m_wirelessFileServerPort->setValue(sm->wirelessFileServerPort());
 
 #ifndef __APPLE__
@@ -351,6 +356,8 @@ void SettingsWidget::connectSignals()
     connect(m_autoRaiseWindow, &QCheckBox::toggled, this,
             &SettingsWidget::onSettingChanged);
     connect(m_switchToNewDevice, &QCheckBox::toggled, this,
+            &SettingsWidget::onSettingChanged);
+    connect(m_autoConnectWirelessDevices, &QCheckBox::toggled, this,
             &SettingsWidget::onSettingChanged);
 #ifndef __APPLE__
     connect(m_unmount_iFuseDrives, &QCheckBox::toggled, this,
@@ -486,6 +493,8 @@ void SettingsWidget::saveSettings()
     sm->setAutoCheckUpdates(m_autoUpdateCheck->isChecked());
     sm->setAutoRaiseWindow(m_autoRaiseWindow->isChecked());
     sm->setSwitchToNewDevice(m_switchToNewDevice->isChecked());
+    sm->setAutoConnectWirelessDevices(
+        m_autoConnectWirelessDevices->isChecked());
     sm->setWirelessFileServerPort(m_wirelessFileServerPort->value());
 
 #ifndef __APPLE__

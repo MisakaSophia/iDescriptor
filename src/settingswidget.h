@@ -62,6 +62,7 @@ private:
 #endif
     QCheckBox *m_useUnsecureBackend;
     // Device Connection
+    QCheckBox *m_autoConnectWirelessDevices;
     QSpinBox *m_connectionTimeout;
 
     // Jailbroken

@@ -20,6 +20,8 @@
 #ifndef DEVICEMANAGERWIDGET_H
 #define DEVICEMANAGERWIDGET_H
 
+class DeviceMenuWidget;
+
 #include "devicemenuwidget.h"
 #include "devicependingwidget.h"
 #include "devicesidebarwidget.h"
@@ -52,9 +54,12 @@ signals:
 private slots:
     void onDeviceSelectionChanged(const DeviceSelection &selection);
 
+protected:
+    void resizeEvent(QResizeEvent *event) override;
+
 private:
     void setupUI();
-
+    void updateUI();
     void addDevice(const iDescriptorDevice *device);
     void removeDevice(const std::string &uuid);
 #ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
@@ -83,6 +88,7 @@ private:
 #endif
 
     std::string m_currentDeviceUuid;
+    QLabel *m_noDevicesLabel = nullptr;
 };
 
 #endif // DEVICEMANAGERWIDGET_H

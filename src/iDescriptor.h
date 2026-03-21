@@ -26,7 +26,6 @@
 #include <QThread>
 #include <QtCore/QObject>
 
-// #include "idevice.h"
 #include <idevice++/bindings.hpp>
 #include <idevice++/core_device_proxy.hpp>
 #include <idevice++/diagnostics_relay.hpp>
@@ -67,7 +66,6 @@
 #define POSSIBLE_ROOT "../../../../"
 #define IDEVICE_DEVICE_VERSION(maj, min, patch)                                \
     ((((maj) & 0xFF) << 16) | (((min) & 0xFF) << 8) | ((patch) & 0xFF))
-#include "devicemonitor.h"
 #include "iDescriptor-utils.h"
 #ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
 #include <libirecovery.h>
@@ -97,6 +95,16 @@
 /* Windows */
 #define LOCKDOWN_PATH qgetenv("PROGRAMDATA") + "/Apple/Lockdown"
 #endif
+
+// idevice_monitor (rust ffi)
+extern "C" {
+#include "idevice_monitor.h"
+}
+namespace iDescriptor
+{
+enum IdeviceConnectionType { CONNECTION_USB = 1, CONNECTION_NETWORK = 2 };
+}
+using namespace IdeviceFFI;
 
 struct BatteryInfo {
     QString health;
@@ -231,7 +239,7 @@ class HeartbeatThread;
 
 struct iDescriptorDevice {
     std::string udid;
-    DeviceMonitorThread::IdeviceConnectionType conn_type;
+    iDescriptor::IdeviceConnectionType conn_type;
     IdeviceProviderHandle *provider;
     DeviceInfo deviceInfo;
     AfcClientHandle *afcClient;

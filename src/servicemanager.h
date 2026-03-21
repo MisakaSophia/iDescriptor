@@ -21,6 +21,7 @@
 #define SERVICEMANAGER_H
 
 #include "iDescriptor.h"
+#include <QCoreApplication>
 #include <QDebug>
 #include <QFuture>
 #include <functional>
@@ -31,9 +32,7 @@
  * @brief Centralized manager for device service operations with thread safety
  *
  * This class provides thread-safe wrappers for all device operations to prevent
- * crashes when devices are unplugged during active operations. It uses a
- * per-device recursive mutex to ensure that device cleanup waits for all
- * operations to complete.
+ * crashes when devices are unplugged during active operations
  */
 class ServiceManager
 {
@@ -44,7 +43,7 @@ public:
                      std::function<T(AfcClientHandle *)> operation,
                      std::optional<AfcClientHandle *> altAfc = std::nullopt)
     {
-        if (!device) {
+        if (QCoreApplication::closingDown() || !device) {
             return T{}; // Return default-constructed value for the type
         }
 
@@ -73,7 +72,7 @@ public:
                      std::function<T()> operation,
                      std::optional<AfcClientHandle *> altAfc = std::nullopt)
     {
-        if (!device) {
+        if (QCoreApplication::closingDown() || !device) {
             qDebug() << "[executeOperation] Device or mutex is null";
             return T{}; // Return default-constructed value for the type
         }
@@ -101,7 +100,7 @@ public:
                      std::function<T()> operation, T failureValue,
                      std::optional<AfcClientHandle *> altAfc = std::nullopt)
     {
-        if (!device) {
+        if (QCoreApplication::closingDown() || !device) {
             return failureValue;
         }
 
@@ -126,7 +125,7 @@ public:
                      std::function<void()> operation,
                      std::optional<AfcClientHandle *> altAfc = std::nullopt)
     {
-        if (!device) {
+        if (QCoreApplication::closingDown() || !device) {
             return;
         }
 
@@ -151,7 +150,7 @@ public:
                          std::function<void()> operation,
                          std::optional<AfcClientHandle *> altAfc = std::nullopt)
     {
-        if (!device) {
+        if (QCoreApplication::closingDown() || !device) {
             return;
         }
 
@@ -177,14 +176,12 @@ public:
         AfcFileHandle *handle)
     {
         try {
-            if (!device) {
-                // FIXME: we have to free error
+            if (QCoreApplication::closingDown() || !device) {
                 return new IdeviceFfiError{1, "DEVICE_OR_MUTEX_IS_NULL"};
             }
 
             std::lock_guard<std::recursive_mutex> lock(device->mutex);
 
-            // Double-check device is still valid after acquiring lock
             if (!device->afcClient) {
                 return new IdeviceFfiError{1, "AFC_CLIENT_IS_NULL"};
             }
@@ -206,8 +203,7 @@ public:
         std::optional<AfcClientHandle *> altAfc = std::nullopt)
     {
         try {
-            if (!device) {
-                // FIXME: we have to free error
+            if (QCoreApplication::closingDown() || !device) {
                 qDebug()
                     << "[executeAfcClientOperation] Device or mutex is null";
                 return new IdeviceFfiError{1, "DEVICE_OR_MUTEX_IS_NULL"};
@@ -215,7 +211,6 @@ public:
 
             std::lock_guard<std::recursive_mutex> lock(device->mutex);
 
-            // Double-check device is still valid after acquiring lock
             if (!device->afcClient) {
                 qDebug() << "[executeAfcClientOperation] AFC client is null";
                 return new IdeviceFfiError{1, "AFC_CLIENT_IS_NULL"};
@@ -245,7 +240,7 @@ public:
         std::optional<AfcClientHandle *> altAfc = std::nullopt)
     {
         try {
-            if (!device) {
+            if (QCoreApplication::closingDown() || !device) {
                 return T{};
             }
 

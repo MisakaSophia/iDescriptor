@@ -77,6 +77,9 @@ public:
     bool switchToNewDevice() const;
     void setSwitchToNewDevice(bool enabled);
 
+    bool autoConnectWirelessDevices() const;
+    void setAutoConnectWirelessDevices(bool enabled);
+
 #ifndef __APPLE__
     bool unmountiFuseOnExit() const;
     void setUnmountiFuseOnExit(bool enabled);

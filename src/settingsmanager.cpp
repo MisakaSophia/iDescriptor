@@ -122,6 +122,17 @@ void SettingsManager::setSwitchToNewDevice(bool enabled)
     m_settings->sync();
 }
 
+bool SettingsManager::autoConnectWirelessDevices() const
+{
+    return m_settings->value("autoConnectWirelessDevices", true).toBool();
+}
+
+void SettingsManager::setAutoConnectWirelessDevices(bool enabled)
+{
+    m_settings->setValue("autoConnectWirelessDevices", enabled);
+    m_settings->sync();
+}
+
 #ifndef __APPLE__
 bool SettingsManager::unmountiFuseOnExit() const
 {
@@ -238,6 +249,7 @@ void SettingsManager::resetToDefaults()
     setAutoCheckUpdates(true);
     setAutoRaiseWindow(true);
     setSwitchToNewDevice(true);
+    setAutoConnectWirelessDevices(true);
 #ifndef __APPLE__
     setUnmountiFuseOnExit(false);
 #endif

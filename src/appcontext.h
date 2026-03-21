@@ -20,11 +20,18 @@
 #ifndef APPCONTEXT_H
 #define APPCONTEXT_H
 
-#include "devicemonitor.h"
 #include "devicesidebarwidget.h"
 #include "heartbeat.h"
 #include "iDescriptor.h"
+#include "mainwindow.h"
+#include "settingsmanager.h"
+#include <QDebug>
+#include <QMessageBox>
 #include <QObject>
+#include <QThreadPool>
+#include <QTimer>
+#include <QUuid>
+#include <thread>
 
 class AppContext : public QObject
 {
@@ -96,8 +103,8 @@ signals:
 public slots:
     void removeDevice(iDescriptor::Uniq uniq);
     void addDevice(iDescriptor::Uniq udid,
-                   DeviceMonitorThread::IdeviceConnectionType connType,
-                   AddType addType, QString wifiMacAddress = QString(),
+                   iDescriptor::IdeviceConnectionType connType, AddType addType,
+                   QString wifiMacAddress = QString(),
                    QString ipAddress = QString());
     void heartbeatFailed(const QString &macAddress, int tries);
     // void heartbeatThreadExited(const QString &macAddress);

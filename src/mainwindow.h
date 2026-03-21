@@ -21,7 +21,6 @@
 #define MAINWINDOW_H
 #include "ZDownloader.h"
 #include "ZUpdater.h"
-#include "devicemonitor.h"
 #include "iDescriptor-ui.h"
 #include "iDescriptor.h"
 #include "ztabwidget.h"
@@ -51,7 +50,6 @@ private:
     DeviceManagerWidget *m_deviceManager;
     QStackedWidget *m_mainStackedWidget;
     QLabel *m_connectedDeviceCountLabel;
-    DeviceMonitorThread *m_deviceMonitor;
     QLabel *m_titleLabel;
     QPushButton *m_minBtn;
     QPushButton *m_maxBtn;

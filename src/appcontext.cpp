@@ -18,16 +18,6 @@
  */
 
 #include "appcontext.h"
-#include "devicemonitor.h"
-#include "iDescriptor.h"
-#include "mainwindow.h"
-#include "settingsmanager.h"
-#include <QDebug>
-#include <QMessageBox>
-#include <QThreadPool>
-#include <QTimer>
-#include <QUuid>
-#include <thread>
 
 AppContext *AppContext::sharedInstance()
 {
@@ -186,7 +176,7 @@ void AppContext::cachePairedDevices()
 }
 
 void AppContext::addDevice(iDescriptor::Uniq uniq,
-                           DeviceMonitorThread::IdeviceConnectionType conn_type,
+                           iDescriptor::IdeviceConnectionType conn_type,
                            AddType addType, QString wifiMacAddress,
                            QString ipAddress)
 {
@@ -524,8 +514,8 @@ void AppContext::tryToConnectToNetworkDevice(const NetworkDevice &device)
     QMetaObject::invokeMethod(
         AppContext::sharedInstance(), "addDevice", Qt::QueuedConnection,
         Q_ARG(iDescriptor::Uniq, iDescriptor::Uniq(device.macAddress, true)),
-        Q_ARG(DeviceMonitorThread::IdeviceConnectionType,
-              DeviceMonitorThread::CONNECTION_NETWORK),
+        Q_ARG(iDescriptor::IdeviceConnectionType,
+              iDescriptor::CONNECTION_NETWORK),
         Q_ARG(AddType, AddType::Wireless), Q_ARG(QString, device.macAddress),
         Q_ARG(QString, device.address));
 }
@@ -552,6 +542,7 @@ void AppContext::freeDevice(iDescriptorDevice *device)
     lockdownd_client_free(device->lockdown);
     idevice_provider_free(device->provider);
     delete device;
+    device = nullptr;
 }
 
 void AppContext::handlePairing(iDescriptorInitDeviceResult *initResult,
@@ -559,10 +550,16 @@ void AppContext::handlePairing(iDescriptorInitDeviceResult *initResult,
 {
     qDebug() << "[handlePairing] for device" << uniq;
     emit initFailed(uniq);
-    if (initResult->error &&
-            initResult->error->code == PairingDialogResponsePending ||
-        initResult->error->code == InvalidHostID ||
-        initResult->error->code == PasswordProtected) {
+
+    if (!initResult || !initResult->error) {
+        qDebug() << "[handlePairing] initResult->error is null for" << uniq
+                 << "- skipping pairing handling";
+        return;
+    }
+
+    const auto code = initResult->error->code;
+    if (code == PairingDialogResponsePending || code == InvalidHostID ||
+        code == PasswordProtected) {
         if (addType == AddType::Regular) {
             m_pendingDevices.append(uniq);
             emit devicePasswordProtected(uniq);
@@ -687,8 +684,8 @@ void AppContext::handlePairing(iDescriptorInitDeviceResult *initResult,
                             AppContext::sharedInstance(), "addDevice",
                             Qt::QueuedConnection,
                             Q_ARG(iDescriptor::Uniq, uniq),
-                            Q_ARG(DeviceMonitorThread::IdeviceConnectionType,
-                                  DeviceMonitorThread::IdeviceConnectionType::
+                            Q_ARG(iDescriptor::IdeviceConnectionType,
+                                  iDescriptor::IdeviceConnectionType::
                                       CONNECTION_NETWORK),
                             Q_ARG(AddType, AddType::Regular));
                         ok = true;

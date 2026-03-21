@@ -174,6 +174,9 @@ void GalleryWidget::setupControlsLayout()
     connect(m_backButton, &ZIconWidget::clicked, this,
             &GalleryWidget::onBackToAlbums);
 
+    connect(m_importButton, &QPushButton::clicked, this,
+            &GalleryWidget::handleImport);
+
     // Add widgets to layout
     m_controlsLayout->addWidget(m_backButton);
     m_controlsLayout->addWidget(m_importButton);
@@ -698,6 +701,23 @@ void GalleryWidget::onPhotoContextMenu(const QPoint &pos)
             &GalleryWidget::onExportSelected);
 
     contextMenu.exec(m_listView->viewport()->mapToGlobal(pos));
+}
+
+void GalleryWidget::handleImport()
+{
+    QStringList filePaths = QFileDialog::getOpenFileNames(
+        this, "Select Photos to Import",
+        QStandardPaths::writableLocation(QStandardPaths::PicturesLocation),
+        "Images (*.jpg *.jpeg *.png *.heic);;All Files (*)");
+
+    if (filePaths.isEmpty()) {
+        return;
+    }
+
+    qDebug() << "Selected files for import:" << filePaths;
+
+    PhotoImportDialog dialog(filePaths, this);
+    dialog.exec();
 }
 
 GalleryWidget::~GalleryWidget()

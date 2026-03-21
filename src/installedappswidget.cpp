@@ -166,6 +166,14 @@ InstalledAppsWidget::InstalledAppsWidget(const iDescriptorDevice *device,
 
 InstalledAppsWidget::~InstalledAppsWidget()
 {
+    if (m_watcher) {
+        m_watcher->cancel();
+        m_watcher->waitForFinished();
+    }
+    if (m_containerWatcher) {
+        m_containerWatcher->cancel();
+        m_containerWatcher->waitForFinished();
+    }
     cleanupHouseArrestClients();
     if (m_springboardClient) {
         springboard_services_free(m_springboardClient);
@@ -290,6 +298,12 @@ void InstalledAppsWidget::fetchInstalledApps()
     // todo maybe clear m_watcher ?
     QFuture<QVariantMap> future = QtConcurrent::run([this]() -> QVariantMap {
         QVariantMap result;
+
+        if (QCoreApplication::closingDown() || !m_device) {
+            return result;
+        }
+        std::lock_guard<std::recursive_mutex> lock(m_device->mutex);
+
         QVariantList apps;
         // fetch icon from springboard service
         IdeviceFfiError *err = nullptr;

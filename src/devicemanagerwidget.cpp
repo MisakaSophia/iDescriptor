@@ -42,7 +42,7 @@ DeviceManagerWidget::DeviceManagerWidget(QWidget *parent)
                         DeviceSelection(device->udid));
                 });
 
-            emit updateNoDevicesConnected();
+            updateUI();
         });
 
     connect(AppContext::sharedInstance(), &AppContext::deviceRemoved, this,
@@ -52,19 +52,19 @@ DeviceManagerWidget::DeviceManagerWidget(QWidget *parent)
                 if (!devices.isEmpty())
                     AppContext::sharedInstance()->setCurrentDeviceSelection(
                         DeviceSelection(devices.first()->udid));
-                emit updateNoDevicesConnected();
+                updateUI();
             });
 
     connect(AppContext::sharedInstance(), &AppContext::devicePairPending, this,
             [this](const QString &udid) {
                 addPendingDevice(udid, false);
-                emit updateNoDevicesConnected();
+                updateUI();
             });
 
     connect(AppContext::sharedInstance(), &AppContext::devicePasswordProtected,
             this, [this](const QString &udid) {
                 addPendingDevice(udid, true);
-                emit updateNoDevicesConnected();
+                updateUI();
             });
 
     connect(AppContext::sharedInstance(), &AppContext::devicePaired, this,
@@ -77,27 +77,27 @@ DeviceManagerWidget::DeviceManagerWidget(QWidget *parent)
                 //             DeviceSelection(device->udid));
                 //     });
 
-                emit updateNoDevicesConnected();
+                updateUI();
             });
 
 #ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
     connect(AppContext::sharedInstance(), &AppContext::recoveryDeviceAdded,
             this, [this](const iDescriptorRecoveryDevice *recoveryDeviceInfo) {
                 addRecoveryDevice(recoveryDeviceInfo);
-                emit updateNoDevicesConnected();
+                updateUI();
             });
 
     connect(AppContext::sharedInstance(), &AppContext::recoveryDeviceRemoved,
             this, [this](uint64_t ecid) {
                 removeRecoveryDevice(ecid);
-                emit updateNoDevicesConnected();
+                updateUI();
             });
 #endif
 
     connect(AppContext::sharedInstance(), &AppContext::devicePairingExpired,
             this, [this](const QString &udid) {
                 removePendingDevice(udid);
-                emit updateNoDevicesConnected();
+                updateUI();
             });
     onDeviceSelectionChanged(
         AppContext::sharedInstance()->getCurrentDeviceSelection());
@@ -108,6 +108,11 @@ void DeviceManagerWidget::setupUI()
     m_mainLayout = new QHBoxLayout(this);
     m_mainLayout->setContentsMargins(0, 0, 0, 0);
     m_mainLayout->setSpacing(0);
+
+    m_noDevicesLabel = new QLabel("This is where devices will appear", this);
+    m_noDevicesLabel->setFont(QFont("", 20, QFont::Bold));
+    m_noDevicesLabel->setAlignment(Qt::AlignCenter);
+    m_noDevicesLabel->setWordWrap(true);
 
     // Create sidebar
     m_sidebar = new DeviceSidebarWidget();
@@ -353,4 +358,31 @@ void DeviceManagerWidget::onDeviceSelectionChanged(
         }
         break;
     }
+}
+
+void DeviceManagerWidget::updateUI()
+{
+    emit updateNoDevicesConnected();
+    m_noDevicesLabel->setVisible(
+        AppContext::sharedInstance()->noDevicesConnected());
+}
+
+void DeviceManagerWidget::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+
+    if (!m_noDevicesLabel)
+        return;
+
+    const int margin = 10;
+    int maxWidth = qMax(0, width() - 2 * margin);
+    m_noDevicesLabel->setMaximumWidth(maxWidth);
+    m_noDevicesLabel->adjustSize();
+
+    int x = (width() - m_noDevicesLabel->width()) / 2;
+    int y = (height() - m_noDevicesLabel->height()) / 2;
+    x = qMax(margin, x);
+    y = qMax(margin, y);
+
+    m_noDevicesLabel->move(x, y);
 }

@@ -23,8 +23,10 @@
 #include "exportalbum.h"
 #include "iDescriptor-ui.h"
 #include "iDescriptor.h"
+#include "photoimportdialog.h"
 #include "photomodel.h"
 #include "zloadingwidget.h"
+#include <QStringList>
 #include <QWidget>
 
 QT_BEGIN_NAMESPACE
@@ -72,6 +74,7 @@ private:
     void loadAlbumThumbnailAsync(const QString &albumPath, QStandardItem *item);
     void onPhotoContextMenu(const QPoint &pos);
     PhotoModel::FilterType getCurrentFilterType() const;
+    void handleImport();
 
     const iDescriptorDevice *m_device;
     bool m_loaded = false;

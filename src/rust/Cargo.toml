@@ -1,0 +1,13 @@
+[package]
+name = "idevice_monitor"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "idevice_monitor"
+crate-type = ["staticlib"]
+
+[dependencies]
+tokio = { version = "1", features = ["rt", "time", "sync", "macros"] }
+futures = "0.3"
+idevice = { path = "../../lib/idevice-rs/idevice", features = ["usbmuxd"] }

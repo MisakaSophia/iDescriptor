@@ -317,6 +317,27 @@ endif()
 # Make sure idevice_cpp depends on the Rust library being built
 add_dependencies(idevice_cpp idevice_rs_build)
 
+
+set(RUST_MONITOR_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/rust)
+set(RUST_MONITOR_LIB_PATH ${RUST_MONITOR_SOURCE_DIR}/target/debug/libidevice_monitor.a)
+
+add_custom_command(
+    OUTPUT ${RUST_MONITOR_LIB_PATH}
+    COMMAND ${CARGO_EXECUTABLE} build --manifest-path ${RUST_MONITOR_SOURCE_DIR}/Cargo.toml
+    WORKING_DIRECTORY ${RUST_MONITOR_SOURCE_DIR}
+    COMMENT "Building Rust device monitor library"
+    VERBATIM
+)
+
+add_custom_target(rust_device_monitor_build DEPENDS ${RUST_MONITOR_LIB_PATH})
+
+add_library(idevice_monitor STATIC IMPORTED GLOBAL)
+set_target_properties(idevice_monitor PROPERTIES
+    IMPORTED_LOCATION "${RUST_MONITOR_LIB_PATH}"
+)
+
+add_dependencies(idevice_monitor rust_device_monitor_build)
+
 target_link_libraries(iDescriptor PRIVATE 
     Qt6::Widgets 
     Qt6::Multimedia
@@ -347,6 +368,7 @@ target_link_libraries(iDescriptor PRIVATE
     # ZToast
     ${IDEVICE_IMPLEMENTATION_LIBS}
     SQLite::SQLite3
+    idevice_monitor
 )
 
 if(ENABLE_RECOVERY_DEVICE_SUPPORT)
@@ -363,6 +385,7 @@ target_include_directories(iDescriptor PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/zupdater/src
     # System includes last
     ${IDEVICE_IMPLEMENTATION_INCLUDES}
+    ${RUST_MONITOR_SOURCE_DIR}/include
 )
 
 
