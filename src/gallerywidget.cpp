@@ -287,8 +287,8 @@ void GalleryWidget::onExportSelected()
     qDebug() << "Starting export of selected files:" << exportItems.size()
              << "items to" << exportDir;
 
-    ExportManager::sharedInstance()->startExport(m_device, exportItems,
-                                                 exportDir);
+    ExportManager::sharedInstance()->startExport(
+        m_device, exportItems, exportDir, "Exporting from gallery");
 }
 
 void GalleryWidget::onExportAll()
@@ -345,8 +345,8 @@ void GalleryWidget::onExportAll()
              << exportDir;
 
     // Start export and the manager will show its own dialog
-    ExportManager::sharedInstance()->startExport(m_device, exportItems,
-                                                 exportDir);
+    ExportManager::sharedInstance()->startExport(
+        m_device, exportItems, exportDir, "Exporting from gallery");
 }
 
 QString GalleryWidget::selectExportDirectory()
@@ -376,7 +376,8 @@ void GalleryWidget::setupAlbumSelectionView()
     m_albumListView->setFlow(QListView::LeftToRight);
     m_albumListView->setWrapping(true);
     m_albumListView->setResizeMode(QListView::Adjust);
-    m_albumListView->setIconSize(QSize(120, 120));
+    m_albumListView->setIconSize(QSize(250, 250));
+    m_albumListView->setGridSize(QSize(260, 280));
     m_albumListView->setSpacing(10);
     m_albumListView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_albumListView->setUniformItemSizes(true);
@@ -387,8 +388,8 @@ void GalleryWidget::setupAlbumSelectionView()
                                    "    padding: 0px;"
                                    "} "
                                    "QListView::item { "
-                                   "    width: 150px; "
-                                   "    height: 150px; "
+                                   "    width: 250px; "
+                                   "    height: 250px; "
                                    "    margin: 2px; "
                                    "}");
 

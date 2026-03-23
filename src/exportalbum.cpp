@@ -149,10 +149,9 @@ void ExportAlbum::updateInfoLabel(size_t photoCount)
 
 void ExportAlbum::startExport()
 {
-    // qDebug() << "Starting export of selected files:" << exportItems.size()
-    //          << "items to" << exportDir;
     ExportManager::sharedInstance()->startExport(
-        m_device, m_exportItems, m_dirPickerLabel->getOutputDir());
+        m_device, m_exportItems, m_dirPickerLabel->getOutputDir(),
+        "Exporting Album(s)");
 }
 
 void ExportAlbum::calculateTotalExportSize()

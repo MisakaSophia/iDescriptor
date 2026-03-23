@@ -25,9 +25,8 @@ public:
             u_int64_t interval = 15;
 
             while (!isInterruptionRequested()) {
-                // 1. Wait for Marco with current interval
                 Result result = m_hb.get_marco(interval);
-                if (result.is_err()) {
+                if (result.is_err() && !isInterruptionRequested()) {
                     qDebug()
                         << "Failed to get marco:"
                         << QString::fromStdString(result.unwrap_err().message);
@@ -38,21 +37,21 @@ public:
                             << "Maximum heartbeat retries reached, exiting for "
                                "device"
                             << m_macAddress;
+                        m_exited = true;
                         emit heartbeatThreadExited(m_macAddress);
                         break;
                     }
-                    // If get_marco failed, skip the rest of this iteration
-                    // and try again with the current interval.
                     continue;
                 }
 
-                // 2. Get the new interval from device
                 interval = result.unwrap();
                 qDebug() << "Received marco, new interval:" << interval;
 
-                // 3. Send Polo response
+                if (isInterruptionRequested()) {
+                    break;
+                }
                 Result polo_result = m_hb.send_polo();
-                if (polo_result.is_err()) {
+                if (polo_result.is_err() && !isInterruptionRequested()) {
                     qDebug() << "Failed to send polo:"
                              << QString::fromStdString(
                                     polo_result.unwrap_err().message);
@@ -67,16 +66,12 @@ public:
                         emit heartbeatThreadExited(m_macAddress);
                         break;
                     }
-                    // If send_polo failed, skip the rest of this iteration
-                    // and try again with the current interval.
                     continue;
                 }
 
-                // If both marco and polo succeeded:
                 qDebug() << "Sent polo successfully";
-                interval += 5; // Increment interval for the next cycle
-                m_initialCompleted = true; // Mark as initially completed after
-                                           // first successful full cycle
+                interval += 5;
+                m_initialCompleted = true;
             }
         } catch (const std::exception &e) {
             qDebug() << "Heartbeat error:" << e.what();

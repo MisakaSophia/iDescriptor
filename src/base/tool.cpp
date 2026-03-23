@@ -23,14 +23,32 @@
 #include "../platform/windows/win_common.h"
 #endif
 
-Tool::Tool(QWidget *parent) : QWidget(parent)
+Tool::Tool(QWidget *parent, bool noMaximize) : QWidget(parent)
 {
 #ifdef __APPLE__
     setupToolFrame(this);
+    if (noMaximize) {
+        setWindowFlags(Qt::Window | Qt::WindowTitleHint |
+                       Qt::CustomizeWindowHint | Qt::WindowCloseButtonHint |
+                       Qt::WindowMinimizeButtonHint);
+    } else {
+        setWindowFlags(Qt::Window | Qt::WindowTitleHint |
+                       Qt::CustomizeWindowHint | Qt::WindowCloseButtonHint |
+                       Qt::WindowMinimizeButtonHint |
+                       Qt::WindowMaximizeButtonHint);
+    }
 #elif defined(WIN32)
     setupWinWindow(this);
-    setWindowFlags(Qt::CustomizeWindowHint | Qt::WindowTitleHint |
-                   Qt::WindowMinimizeButtonHint | Qt::WindowCloseButtonHint);
+    if (noMaximize) {
+        setWindowFlags(Qt::CustomizeWindowHint | Qt::WindowTitleHint |
+                       Qt::WindowMinimizeButtonHint |
+                       Qt::WindowCloseButtonHint);
+    } else {
+        setWindowFlags(Qt::CustomizeWindowHint | Qt::WindowTitleHint |
+                       Qt::WindowMinimizeButtonHint |
+                       Qt::WindowCloseButtonHint |
+                       Qt::WindowMaximizeButtonHint);
+    }
 #else
 
 #endif

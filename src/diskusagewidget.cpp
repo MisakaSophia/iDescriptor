@@ -41,7 +41,7 @@ DiskUsageWidget::DiskUsageWidget(const iDescriptorDevice *device,
 {
     setMinimumHeight(80);
     setupUI();
-    fetchData();
+    QTimer::singleShot(100, this, &DiskUsageWidget::fetchData);
 }
 
 void DiskUsageWidget::setupUI()
@@ -515,6 +515,9 @@ void DiskUsageWidget::fetchData()
             result["galleryUsage"] = QVariant::fromValue(uint64_t(0));
             return result;
         }
+
+        result["galleryUsage"] = QVariant::fromValue(uint64_t(0));
+        return result;
 
         const size_t CHUNK_SIZE = 256 * 1024;
         uint8_t *db_data = nullptr;

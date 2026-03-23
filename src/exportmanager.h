@@ -22,19 +22,24 @@
 
 #include "exportmanagerthread.h"
 #include "iDescriptor.h"
+#include <QCoreApplication>
+#include <QDebug>
+#include <QDir>
+#include <QFileInfo>
 #include <QFuture>
 #include <QFutureWatcher>
 #include <QMap>
+#include <QMessageBox>
 #include <QMutex>
+#include <QMutexLocker>
 #include <QObject>
+#include <QStandardPaths>
 #include <QString>
 #include <QUuid>
+#include <QtConcurrent/QtConcurrent>
 #include <atomic>
 #include <memory>
 #include <optional>
-
-// Forward declaration
-class ExportProgressDialog;
 
 class ExportManager : public QObject
 {
@@ -50,15 +55,15 @@ public:
 
     QUuid startExport(const iDescriptorDevice *device,
                       const QList<ExportItem> &items,
-                      const QString &destinationPath,
+                      const QString &destinationPath, const QString &jobTitle,
                       std::optional<AfcClientHandle *> altAfc = std::nullopt);
 
     QUuid startImport(const iDescriptorDevice *device,
                       const QList<ImportItem> &items,
-                      const QString &destinationPath,
+                      const QString &destinationPath, const QString &jobTitle,
                       std::optional<AfcClientHandle *> altAfc = std::nullopt);
 
-    void cancelExport(const QUuid &jobId);
+    void cancel(const QUuid &jobId);
     void cancelAllJobs();
     bool isJobRunning(const QUuid &jobId) const;
     static QString generateUniqueOutputPath(const QString &basePath);
@@ -96,9 +101,6 @@ private:
     // Thread-safe storage for active jobs
     mutable QMutex m_jobsMutex;
     QMap<QUuid, JobBase *> m_activeJobs;
-
-    // Manager owns the dialog
-    ExportProgressDialog *m_exportProgressDialog;
 };
 
 #endif // EXPORTMANAGER_H

@@ -34,6 +34,25 @@
 #include <QTreeWidget>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <QApplication>
+#include <QDebug>
+#include <QDesktopServices>
+#include <QFileDialog>
+#include <QHBoxLayout>
+#include <QHeaderView>
+#include <QIcon>
+#include <QInputDialog>
+#include <QMessageBox>
+#include <QPainter>
+#include <QPalette>
+#include <QPushButton>
+#include <QSignalBlocker>
+#include <QSplitter>
+#include <QSplitterHandle>
+#include <QTreeWidget>
+#include <QVariant>
+#include "zloadingwidget.h"
+
 
 class FileExplorerWidget : public QWidget
 {
@@ -41,11 +60,13 @@ class FileExplorerWidget : public QWidget
 public:
     explicit FileExplorerWidget(const iDescriptorDevice *device,
                                 QWidget *parent = nullptr);
+    void init();
 
 private slots:
     void onSidebarItemClicked(QTreeWidgetItem *item, int column);
 
 private:
+    ZLoadingWidget *m_loadingWidget;
     QSplitter *m_mainSplitter;
     QStackedWidget *m_stackedWidget;
     AfcClientHandle *currentAfcClient;
@@ -62,6 +83,7 @@ private:
     void saveFavoritePlace(const QString &alias, const QString &path);
     void saveFavoritePlaceAfc2(const QString &alias, const QString &path);
     void onSidebarContextMenuRequested(const QPoint &pos);
+    bool m_loaded = false;
 };
 
 #endif // FILEEXPLORERWIDGET_H

@@ -165,26 +165,31 @@ void ZTabWidget::finalizeStyles()
     if (m_tabs.isEmpty())
         return;
 
-    ZTab *tab = m_tabs[0];
-    if (tab) {
-        tab->setChecked(true);
+    m_currentIndex = 0;
+    ZTab *tab = m_tabs[m_currentIndex];
+    if (!tab)
+        return;
 
-        QTimer::singleShot(0, [this, tab]() {
-            if (!tab)
-                return;
+    tab->setChecked(true);
 
+    QTimer::singleShot(0, this, [this]() {
+        if (m_currentIndex >= 0 && m_currentIndex < m_tabs.size()) {
+#ifndef WIN32
+            animateGlider(m_currentIndex, true);
+            m_glider->show();
+#else
+            ZTab *tab = m_tabs[m_currentIndex];
             const QRect endRect = gliderEndRectForTab(tab);
-
             if (m_gliderAnimation) {
                 m_gliderAnimation->stop();
                 delete m_gliderAnimation;
                 m_gliderAnimation = nullptr;
             }
-
             m_glider->setGeometry(endRect);
             m_glider->show();
-        });
-    }
+#endif
+        }
+    });
 
     updateTabStyles();
 }

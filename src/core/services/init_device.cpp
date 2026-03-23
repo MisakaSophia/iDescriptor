@@ -450,12 +450,6 @@ void init_idescriptor_device(const iDescriptor::Uniq &uniq,
         }
 
         heartbeatThread = new HeartbeatThread(heartbeat, uniq);
-        heartbeatThread->start();
-
-        while (!heartbeatThread->initialCompleted()) {
-            // sleep(1);
-        }
-
     } else {
 
         UsbmuxdDeviceHandle **devices;

@@ -649,6 +649,7 @@ struct ExportResult {
     QString sourceFilePath;
     QString outputFilePath;
     bool success = false;
+    bool cancelled = false;
     QString errorMessage;
     qint64 bytesTransferred = 0;
 };

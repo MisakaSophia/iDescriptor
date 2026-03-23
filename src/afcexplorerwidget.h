@@ -40,7 +40,6 @@
 #include <QWidget>
 
 class ExportManager;
-class ExportProgressDialog;
 
 class AfcExplorerWidget : public QWidget
 {
@@ -96,7 +95,6 @@ private:
 
     // Export system
     ExportManager *m_exportManager;
-    ExportProgressDialog *m_exportProgressDialog;
 
     void setupFileExplorer();
     void loadPath(const QString &path);

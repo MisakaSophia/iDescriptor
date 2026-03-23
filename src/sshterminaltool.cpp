@@ -25,6 +25,7 @@
 SSHTerminalTool::SSHTerminalTool(QWidget *parent)
     : Tool{parent}, m_selectedUniq(QString(""), false)
 {
+    setWindowTitle("SSH Terminal - iDescriptor");
     QHBoxLayout *mainLayout = new QHBoxLayout(this);
     mainLayout->setContentsMargins(2, 2, 2, 2);
     mainLayout->setSpacing(2);

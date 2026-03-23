@@ -98,11 +98,7 @@ void AppsWidget::setupUI()
 
     m_loginButton = new QPushButton();
     m_searchEdit = new QLineEdit();
-#ifndef WIN32
-    m_searchEdit->setMaximumWidth(350);
-#else
     m_searchEdit->setMaximumWidth(200);
-#endif
 
     // --- Status and Login Button ---
     m_manager = AppStoreManager::sharedInstance();

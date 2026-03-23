@@ -281,9 +281,8 @@ void AfcExplorerWidget::onFileListContextMenu(const QPoint &pos)
                 ExportItem(devicePath, fileName, m_device->udid));
         }
 
-        // Start export with singleton - manager will show its own dialog
-        ExportManager::sharedInstance()->startExport(m_device, exportItems, dir,
-                                                     m_afc);
+        ExportManager::sharedInstance()->startExport(
+            m_device, exportItems, dir, "Exporting from file Explorer", m_afc);
     } else if (selectedAction == openAction) {
         onItemDoubleClicked(item);
     } else if (selectedAction == openNativeAction) {
@@ -328,8 +327,8 @@ void AfcExplorerWidget::onExportClicked()
     }
 
     // Start export
-    ExportManager::sharedInstance()->startExport(m_device, exportItems, dir,
-                                                 m_afc);
+    ExportManager::sharedInstance()->startExport(
+        m_device, exportItems, dir, "Exporting from file Explorer", m_afc);
 }
 
 void AfcExplorerWidget::exportAndOpenSelectedFile(QListWidgetItem *item,
@@ -363,8 +362,8 @@ void AfcExplorerWidget::exportAndOpenSelectedFile(QListWidgetItem *item,
                                       "Failed to export file for opening.");
             }
         }));
-    ExportManager::sharedInstance()->startExport(m_device, exportItems,
-                                                 directory, m_afc);
+    ExportManager::sharedInstance()->startExport(
+        m_device, exportItems, directory, "Exporting to open file", m_afc);
 }
 
 // FIXME: should be disabled if there is an error loading afc
@@ -395,8 +394,8 @@ void AfcExplorerWidget::onImportClicked()
                            }
                        }));
     }
-    ExportManager::sharedInstance()->startImport(m_device, importItems,
-                                                 currPath, m_afc);
+    ExportManager::sharedInstance()->startImport(
+        m_device, importItems, currPath, "Importing Files", m_afc);
 }
 
 void AfcExplorerWidget::setupFileExplorer()

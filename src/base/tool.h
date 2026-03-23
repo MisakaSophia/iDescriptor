@@ -33,7 +33,7 @@
 class Tool : public QWidget
 {
 public:
-    explicit Tool(QWidget *parent = nullptr);
+    explicit Tool(QWidget *parent = nullptr, bool noMaximize = true);
 };
 
 #endif // TOOL_H

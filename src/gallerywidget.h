@@ -42,7 +42,6 @@ class QStandardItemModel;
 QT_END_NAMESPACE
 
 class ExportManager;
-class ExportProgressDialog;
 
 class GalleryWidget : public QWidget
 {
@@ -105,7 +104,6 @@ private:
 
     // Export manager
     ExportManager *m_exportManager;
-    ExportProgressDialog *m_exportProgressDialog;
 };
 
 #endif // GALLERYWIDGET_H

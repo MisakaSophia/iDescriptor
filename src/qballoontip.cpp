@@ -47,8 +47,16 @@ QBalloonTip::QBalloonTip(QWidget *widget)
               Qt::ToolTip),
       widget(widget)
 {
-    // setAttribute(Qt::WA_DeleteOnClose);
-    // setAttribute(Qt::WA_TranslucentBackground);
+    setObjectName("balloonTip");
+#ifdef WIN32
+    setAttribute(Qt::WA_TranslucentBackground);
+#else
+    setAttribute(Qt::WA_StyledBackground, true);
+    setStyleSheet("QWidget#balloonTip { "
+                  "  background-color: transparent;"
+                  "}");
+#endif
+
     if (widget) {
         connect(widget, &QWidget::destroyed, this, &QBalloonTip::close);
     } else if (QApplication::activeWindow()) {
@@ -218,7 +226,39 @@ bool QBalloonTip::eventFilter(QObject *obj, QEvent *event)
             close();
             return false;
         }
+    } else if (event->type() == QEvent::ApplicationDeactivate) {
+        // App went to background → hide balloon
+        if (m_visible) {
+            m_visible = false;
+            close();
+        }
+        return false; // let others handle it too
     }
+
+    // handle macOS tab switch and Escape key handling
+    else if (event->type() == QEvent::KeyPress) {
+        QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
+#ifdef __APPLE__
+        if (auto *ke = dynamic_cast<QKeyEvent *>(event)) {
+            const Qt::KeyboardModifiers mods = ke->modifiers();
+            if ((mods & (Qt::MetaModifier | Qt::ControlModifier))) {
+                if (m_visible) {
+                    m_visible = false;
+                    close();
+                    return true;
+                }
+            }
+        }
+#endif
+        if (keyEvent->key() == Qt::Key_Escape) {
+            if (m_visible) {
+                m_visible = false;
+                close();
+                return true;
+            }
+        }
+    }
+
     return QWidget::eventFilter(obj, event);
 }
 

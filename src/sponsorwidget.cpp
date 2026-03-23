@@ -23,6 +23,7 @@ SponsorWidget::SponsorWidget(QWidget *parent) : Tool(parent)
 {
     setMaximumSize(600, 400);
     setLayout(new QVBoxLayout(this));
+    setWindowTitle("Sponsor Us - iDescriptor");
     QLabel *sponsorTitle = new QLabel("Would you like to sponsor us?");
     sponsorTitle->setStyleSheet("font-weight: bold; font-size: 16pt;");
     sponsorTitle->setAlignment(Qt::AlignCenter);

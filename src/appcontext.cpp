@@ -260,18 +260,9 @@ void AppContext::addDevice(iDescriptor::Uniq uniq,
                     .diagRelay = initResult->diagRelay,
                     .heartbeatThread = initResult->heartbeatThread};
 
-                /*
-                  sometimes heartbeat thread can fail before we even add
-                  the device, in that case we should not add the device at all
-                  this seems to happen on Windows for some reason
-                */
                 if (initResult->deviceInfo.isWireless &&
-                    initResult->heartbeatThread &&
-                    initResult->heartbeatThread->exited()) {
-                    qDebug() << "Heartbeat thread already exited for device"
-                             << uniq << " Not adding device.";
-                    freeDevice(device);
-                    return;
+                    initResult->heartbeatThread) {
+                    device->heartbeatThread->start();
                 }
 
                 m_devices[device->udid] = device;

@@ -22,14 +22,22 @@
 
 #include "iDescriptor.h"
 #include "zlineedit.h"
+#include "zloadingwidget.h"
+#include <QAction>
+#include <QApplication>
 #include <QCheckBox>
+#include <QDebug>
 #include <QEnterEvent>
 #include <QEvent>
 #include <QFrame>
 #include <QFutureWatcher>
 #include <QGroupBox>
 #include <QHBoxLayout>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QLabel>
+#include <QLineEdit>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QPainter>
@@ -40,8 +48,10 @@
 #include <QScrollArea>
 #include <QSplitter>
 #include <QStackedWidget>
+#include <QStyle>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <QtConcurrent/QtConcurrent>
 
 class AppTabWidget : public QWidget
 {
@@ -94,6 +104,7 @@ class InstalledAppsWidget : public QWidget
 public:
     explicit InstalledAppsWidget(const iDescriptorDevice *device,
                                  QWidget *parent = nullptr);
+    void init();
     ~InstalledAppsWidget();
 
 private slots:
@@ -139,12 +150,15 @@ private:
     QFutureWatcher<QVariantMap> *m_watcher;
     QFutureWatcher<QVariantMap> *m_containerWatcher;
     QSplitter *m_splitter;
+    ZLoadingWidget *m_zloadingWidget;
+
     AfcClientHandle *m_houseArrestAfcClient = nullptr;
     // App data storage
     QList<AppTabWidget *> m_appTabs;
     AppTabWidget *m_selectedTab = nullptr;
     SpringBoardServicesClientHandle *m_springboardClient = nullptr;
     bool m_loadingContainer = false;
+    bool m_loaded = false;
 };
 
 #endif // INSTALLEDAPPSWIDGET_H

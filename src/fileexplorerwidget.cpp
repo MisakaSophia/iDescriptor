@@ -23,35 +23,33 @@
 #include "iDescriptor.h"
 #include "mediapreviewdialog.h"
 #include "settingsmanager.h"
-#include <QApplication>
-#include <QDebug>
-#include <QDesktopServices>
-#include <QFileDialog>
-#include <QHBoxLayout>
-#include <QHeaderView>
-#include <QIcon>
-#include <QInputDialog>
-#include <QMenu>
-#include <QMessageBox>
-#include <QPainter>
-#include <QPalette>
-#include <QPushButton>
-#include <QSignalBlocker>
-#include <QSplitter>
-#include <QSplitterHandle>
-#include <QTreeWidget>
-#include <QVariant>
 
 FileExplorerWidget::FileExplorerWidget(const iDescriptorDevice *device,
                                        QWidget *parent)
     : QWidget(parent), m_device(device)
 {
-    m_mainSplitter = new ModernSplitter(Qt::Horizontal, this);
+    QVBoxLayout *rootLayout = new QVBoxLayout(this);
+    rootLayout->setContentsMargins(0, 0, 0, 0);
+
+    m_loadingWidget = new ZLoadingWidget(true, this);
+    rootLayout->addWidget(m_loadingWidget);
+}
+
+void FileExplorerWidget::init() {
+    if (m_loaded) {
+        qDebug() << "[FileExplorerWidget]: Already initialized, skipping init()";
+        return;
+    }
+    m_loaded = true;
+    m_mainSplitter = new ModernSplitter(Qt::Horizontal);
 
     // Main layout
-    QHBoxLayout *mainLayout = new QHBoxLayout(this);
+    QWidget *contentContainer = new QWidget(this);
+    QHBoxLayout *mainLayout = new QHBoxLayout(contentContainer);
     mainLayout->addWidget(m_mainSplitter);
     mainLayout->setContentsMargins(0, 0, 0, 0);
+
+    m_loadingWidget->setupContentWidget(contentContainer);
 
     setupSidebar();
 
@@ -85,7 +83,10 @@ FileExplorerWidget::FileExplorerWidget(const iDescriptorDevice *device,
     connect(SettingsManager::sharedInstance(),
             &SettingsManager::favoritePlacesChanged, this,
             &FileExplorerWidget::loadFavoritePlaces);
+
+    m_loadingWidget->stop(true);
 }
+
 void FileExplorerWidget::setupSidebar()
 {
     m_sidebarTree = new QTreeWidget();

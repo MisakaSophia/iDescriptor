@@ -20,13 +20,6 @@
 #include "exportmanager.h"
 #include "servicemanager.h"
 #include "statusballoon.h"
-#include <QCoreApplication>
-#include <QDebug>
-#include <QDir>
-#include <QFileInfo>
-#include <QMutexLocker>
-#include <QStandardPaths>
-#include <QtConcurrent/QtConcurrent>
 
 ExportManager *ExportManager::sharedInstance()
 {
@@ -37,6 +30,7 @@ ExportManager *ExportManager::sharedInstance()
 
 ExportManager::ExportManager(QObject *parent) : QObject(parent) {}
 
+// FIXME
 ExportManager::~ExportManager()
 {
     // Cancel all active jobs
@@ -52,21 +46,25 @@ ExportManager::~ExportManager()
     m_activeJobs.clear();
 }
 
-// FIXME: show error on ui
 QUuid ExportManager::startExport(const iDescriptorDevice *device,
                                  const QList<ExportItem> &items,
                                  const QString &destinationPath,
+                                 const QString &exportTitle,
                                  std::optional<AfcClientHandle *> altAfc)
 {
     qDebug() << "startExport() entry - items:" << items.size()
              << "dest:" << destinationPath;
     if (!device) {
         qWarning() << "Invalid device provided to ExportManager";
+        QMessageBox::critical(nullptr, "Export Error",
+                              "Invalid device specified for export.");
         return QUuid();
     }
 
     if (items.isEmpty()) {
         qWarning() << "No items provided for export";
+        QMessageBox::information(nullptr, "Export Error",
+                                 "No items selected for export.");
         return QUuid();
     }
 
@@ -76,6 +74,9 @@ QUuid ExportManager::startExport(const iDescriptorDevice *device,
         if (!destDir.mkpath(".")) {
             qWarning() << "Could not create destination directory:"
                        << destinationPath;
+            QMessageBox::critical(nullptr, "Export Error",
+                                  "Could not create destination directory.");
+
             return QUuid();
         }
     }
@@ -89,11 +90,8 @@ QUuid ExportManager::startExport(const iDescriptorDevice *device,
     job->d_udid = device->udid;
 
     job->statusBalloonProcessId = StatusBalloon::sharedInstance()->startProcess(
-        QString("Exporting %1 item(s)").arg(items.size()), items.size(),
-        destinationPath, ProcessType::Export);
-
-    // Use ExportManager's own jobId for its internal tracking and signals
-    const QUuid managerJobId = job->jobId;
+        exportTitle, items.size(), destinationPath, ProcessType::Export,
+        job->jobId);
 
     // todo:cleanupJob ?
     // connect(job->watcher, &QFutureWatcher<void>::finished, this,
@@ -102,30 +100,34 @@ QUuid ExportManager::startExport(const iDescriptorDevice *device,
     // Store job before starting
     {
         QMutexLocker locker(&m_jobsMutex);
-        m_activeJobs[managerJobId] = job;
+        m_activeJobs[job->jobId] = job;
     }
 
     m_exportThread->executeExportJob(job);
-    qDebug() << "Started export job" << managerJobId << "for" << items.size()
+    qDebug() << "Started export job" << job->jobId << "for" << items.size()
              << "items";
-    return managerJobId;
+    return job->jobId;
 }
 
-// FIXME: show error on ui
 QUuid ExportManager::startImport(const iDescriptorDevice *device,
                                  const QList<ImportItem> &items,
                                  const QString &destinationPath,
+                                 const QString &importTitle,
                                  std::optional<AfcClientHandle *> altAfc)
 {
     qDebug() << "startExport() entry - items:" << items.size()
              << "dest:" << destinationPath;
     if (!device) {
         qWarning() << "Invalid device provided to ExportManager";
+        QMessageBox::critical(nullptr, "Import Error",
+                              "Invalid device specified for import.");
         return QUuid();
     }
 
     if (items.isEmpty()) {
         qWarning() << "No items provided for export";
+        QMessageBox::information(nullptr, "Import Error",
+                                 "No items selected for import.");
         return QUuid();
     }
 
@@ -138,11 +140,8 @@ QUuid ExportManager::startImport(const iDescriptorDevice *device,
     job->d_udid = device->udid;
 
     job->statusBalloonProcessId = StatusBalloon::sharedInstance()->startProcess(
-        QString("Importing %1 item(s)").arg(items.size()), items.size(),
-        destinationPath, ProcessType::Import);
-
-    // Use ExportManager's own jobId for its internal tracking and signals
-    const QUuid managerJobId = job->jobId;
+        importTitle, items.size(), destinationPath, ProcessType::Import,
+        job->jobId);
 
     // todo:cleanupJob ?
     // connect(job->watcher, &QFutureWatcher<void>::finished, this,
@@ -151,16 +150,16 @@ QUuid ExportManager::startImport(const iDescriptorDevice *device,
     // Store job before starting
     {
         QMutexLocker locker(&m_jobsMutex);
-        m_activeJobs[managerJobId] = job;
+        m_activeJobs[job->jobId] = job;
     }
 
     m_exportThread->executeImportJob(job);
-    qDebug() << "Started import job" << managerJobId << "for" << items.size()
+    qDebug() << "Started import job" << job->jobId << "for" << items.size()
              << "items";
-    return managerJobId;
+    return job->jobId;
 }
 
-void ExportManager::cancelExport(const QUuid &jobId)
+void ExportManager::cancel(const QUuid &jobId)
 {
     QMutexLocker locker(&m_jobsMutex);
     auto it = m_activeJobs.find(jobId);

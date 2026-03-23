@@ -138,7 +138,7 @@ AirPlaySettings AirPlaySettingsDialog::getSettings() const
 }
 
 AirPlayWidget::AirPlayWidget(QWidget *parent)
-    : Tool(parent), m_stackedWidget(nullptr), m_tutorialWidget(nullptr),
+    : Tool(parent, false), m_stackedWidget(nullptr), m_tutorialWidget(nullptr),
       m_streamingWidget(nullptr), m_loadingIndicator(nullptr),
       m_loadingLabel(nullptr), m_tutorialPlayer(nullptr),
       m_tutorialVideoWidget(nullptr), m_videoLabel(nullptr),

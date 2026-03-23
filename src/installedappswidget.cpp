@@ -24,17 +24,6 @@
 #include "qprocessindicator.h"
 #include "servicemanager.h"
 #include "zlineedit.h"
-#include <QAction>
-#include <QApplication>
-#include <QDebug>
-#include <QEnterEvent>
-#include <QGroupBox>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QLineEdit>
-#include <QStyle>
-#include <QtConcurrent/QtConcurrent>
 
 AppTabWidget::AppTabWidget(const QString &appName, const QString &bundleId,
                            const QString &version, const QPixmap &icon,
@@ -152,6 +141,22 @@ InstalledAppsWidget::InstalledAppsWidget(const iDescriptorDevice *device,
                                          QWidget *parent)
     : QWidget(parent), m_device(device)
 {
+    QVBoxLayout *rootLayout = new QVBoxLayout(this);
+    rootLayout->setContentsMargins(0, 0, 0, 0);
+
+    m_zloadingWidget = new ZLoadingWidget(true, this);
+    rootLayout->addWidget(m_zloadingWidget);
+}
+
+void InstalledAppsWidget::init()
+{
+    if (m_loaded) {
+        qDebug()
+            << "[InstalledAppsWidget]: Already initialized, skipping init()";
+        return;
+    }
+    m_loaded = true;
+
     m_watcher = new QFutureWatcher<QVariantMap>(this);
     m_containerWatcher = new QFutureWatcher<QVariantMap>(this);
     setupUI();
@@ -183,9 +188,12 @@ InstalledAppsWidget::~InstalledAppsWidget()
 
 void InstalledAppsWidget::setupUI()
 {
-    m_mainLayout = new QHBoxLayout(this);
+    QWidget *contentContainer = new QWidget(this);
+    m_mainLayout = new QHBoxLayout(contentContainer);
     m_mainLayout->setContentsMargins(0, 0, 0, 0);
     m_mainLayout->setSpacing(0);
+
+    m_zloadingWidget->setupContentWidget(contentContainer);
 
     // Create stacked widget for different states
     m_stackedWidget = new QStackedWidget(this);
@@ -482,6 +490,7 @@ void InstalledAppsWidget::onAppsDataReady()
 
     // Switch to content view once data is loaded
     m_stackedWidget->setCurrentWidget(m_contentWidget);
+    m_zloadingWidget->stop(true);
 
     // Sort apps by display name
     std::sort(apps.begin(), apps.end(),

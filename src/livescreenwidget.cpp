@@ -33,7 +33,7 @@
 #include <QVBoxLayout>
 
 LiveScreenWidget::LiveScreenWidget(iDescriptorDevice *device, QWidget *parent)
-    : Tool{parent}, m_device(device)
+    : Tool{parent, false}, m_device(device)
 {
     setWindowTitle("Live Screen - iDescriptor");
     setAttribute(Qt::WA_DeleteOnClose);

@@ -85,6 +85,13 @@ void DeviceMenuWidget::init()
                 if (stackedWidget->widget(index) ==
                     m_galleryWidget) { // Gallery tab
                     m_galleryWidget->load();
+                } else if (stackedWidget->widget(index) ==
+                           m_fileExplorerWidget) { // Files tab
+                    QTimer::singleShot(
+                        200, this, [this]() { m_fileExplorerWidget->init(); });
+                } else if (stackedWidget->widget(index) ==
+                           m_installedAppsWidget) { // Apps tab
+                    m_installedAppsWidget->init();
                 }
             });
 

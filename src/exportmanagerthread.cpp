@@ -38,14 +38,9 @@ void ExportManagerThread::executeExportJobInternal(ExportJob *job)
              << job->items.size() << "items";
 
     for (int i = 0; i < job->items.size(); ++i) {
-        if (job->cancelRequested.load() ||
-            StatusBalloon::sharedInstance()->isCancelRequested(
-                job->statusBalloonProcessId)) {
+        if (job->cancelRequested.load()) {
             summary.wasCancelled = true;
-            qDebug() << "Export job" << job->jobId << "was cancelled";
-
-            emit exportCancelled(job->jobId);
-            return;
+            goto exit;
         }
 
         const ExportItem &item = job->items.at(i);
@@ -60,15 +55,21 @@ void ExportManagerThread::executeExportJobInternal(ExportJob *job)
             summary.failedItems++;
         }
 
+        if (result.cancelled) {
+            summary.wasCancelled = true;
+            goto exit;
+        }
+
         emit itemExported(job->statusBalloonProcessId, result);
     }
 
+exit:
     qDebug() << "Export job" << job->jobId
              << "completed - Success:" << summary.successfulItems
              << "Failed:" << summary.failedItems
              << "Bytes:" << summary.totalBytesTransferred;
 
-    emit exportFinished(job->jobId, summary);
+    emit exportFinished(job->statusBalloonProcessId, summary);
 }
 
 ExportResult ExportManagerThread::exportSingleItem(
@@ -76,7 +77,7 @@ ExportResult ExportManagerThread::exportSingleItem(
     std::optional<AfcClientHandle *> altAfc, std::atomic<bool> &cancelRequested,
     const QUuid &statusBalloonProcessId)
 {
-    ExportResult result;
+    ExportResult result; //
     result.sourceFilePath = item.sourcePathOnDevice;
 
     // Generate output path
@@ -119,7 +120,12 @@ ExportResult ExportManagerThread::exportSingleItem(
         result.errorMessage =
             QString("Failed to export file: %1").arg(err->message);
         qDebug() << result.errorMessage;
-        idevice_error_free(err);
+        if (cancelRequested.load()) {
+            result.cancelled = true;
+        }
+        // FIXME: THIS WILL FREE C STRING FROM RUST ??
+        // because error may not be returned from rust, but from C++ wrapper
+        // idevice_error_free(err);
         return result;
     }
 
@@ -161,9 +167,7 @@ void ExportManagerThread::executeImportJobInternal(ImportJob *job)
              << job->items.size() << "items";
 
     for (int i = 0; i < job->items.size(); ++i) {
-        if (job->cancelRequested.load() ||
-            StatusBalloon::sharedInstance()->isCancelRequested(
-                job->statusBalloonProcessId)) {
+        if (job->cancelRequested.load()) {
             summary.wasCancelled = true;
             qDebug() << "Import job" << job->jobId << "was cancelled";
 

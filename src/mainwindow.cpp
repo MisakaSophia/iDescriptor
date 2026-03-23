@@ -162,13 +162,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
             []() { QDesktopServices::openUrl(QUrl(REPO_URL)); });
 
     m_connectedDeviceCountLabel = new QLabel("iDescriptor: no devices");
-    m_connectedDeviceCountLabel->setContentsMargins(5, 0, 5, 0);
+    m_connectedDeviceCountLabel->setContentsMargins(0, 0, 0, 0);
     m_connectedDeviceCountLabel->setStyleSheet(
         "QLabel:hover { background-color : #13131319; }");
 
     QWidget *statusbar = new QWidget();
     QHBoxLayout *statusLayout = new QHBoxLayout(statusbar);
-    statusLayout->setContentsMargins(0, 0, 0, 0);
+    statusLayout->setContentsMargins(10, 0, 10, 0);
+    statusLayout->setSpacing(1);
     statusbar->setObjectName("StatusBar");
     statusbar->setStyleSheet(
         "QWidget#StatusBar { background-color: transparent; }");
@@ -205,7 +206,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     statusLayout->addWidget(welcomeMenuSwitch);
     statusLayout->addStretch(1);
 
-    statusLayout->setContentsMargins(0, 0, 0, 0);
     QLabel *appVersionLabel = new QLabel(QString("v%1").arg(APP_VERSION));
     appVersionLabel->setContentsMargins(5, 0, 5, 0);
     appVersionLabel->setStyleSheet(
