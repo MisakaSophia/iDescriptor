@@ -1,4 +1,4 @@
-use crate::{APP_DEVICE_STATE, RUNTIME, utils};
+use crate::{APP_DEVICE_STATE, RUNTIME, run_sync, utils};
 use cxx_qt::Threading;
 use cxx_qt_lib::{QByteArray, QList, QMap, QMapPair_QString_QVariant, QString, QVariant};
 use idevice::afc::opcode::AfcFopenMode;
@@ -75,7 +75,7 @@ mod qobject {
         );
 
         #[qsignal]
-        fn dev_image_mounted(self: Pin<&mut ServiceManager>, success: bool);
+        fn dev_image_mounted(self: Pin<&mut ServiceManager>, success: bool,is_locked: bool);
 
         #[qsignal]
         fn developer_mode_option_revealed(self: Pin<&mut ServiceManager>, success: bool);
@@ -83,6 +83,8 @@ mod qobject {
         #[qsignal]
         fn mounted_image_retrieved(
             self: Pin<&mut ServiceManager>,
+            success: bool,
+            is_locked: bool,
             sig: QByteArray,
             sig_length: u64,
         );
@@ -110,6 +112,24 @@ mod qobject {
             apps_usage: u64,
             gallery_usage: u64,
         );
+
+        #[qinvokable]
+        fn restart(&self) -> bool;
+
+        #[qinvokable]
+        fn shutdown(&self) -> bool;
+
+        #[qinvokable]
+        fn enter_recovery_mode(&self) -> bool;
+
+        #[qinvokable]
+        fn install_ipa(&self, ipa_path: &QString);
+
+        #[qsignal]
+        fn install_ipa_init(self: Pin<&mut ServiceManager>, started: bool, state: QString);
+
+        #[qsignal]
+        fn install_ipa_progress(self: Pin<&mut ServiceManager>, progress: f64, state: QString);
     }
 
     impl cxx_qt::Threading for ServiceManager {}
@@ -146,9 +166,7 @@ impl cxx_qt::Constructor<(QString, u32)> for qobject::ServiceManager {
 
     fn initialize(self: Pin<&mut Self>, _arguments: Self::InitializeArguments) {
         let udid_for_log = self.get_udid().to_string();
-        println!(
-            "ServiceServiceManager::ServiceManager::initialize called for UDID: {udid_for_log}"
-        );
+        println!("ServiceManager::initialize called for UDID: {udid_for_log}");
         self.start_update_battery_info_interval();
     }
 }
@@ -169,14 +187,12 @@ impl qobject::ServiceManager {
                 let device = match maybe_device {
                     Some(d) => d,
                     None => {
-                        println!("start_update_battery_info_interval: Device {udid} not found");
+                        println!("Battery info interval: Device {udid} not found");
                         return;
                     }
                 };
 
-                println!(
-                    "start_update_battery_info_interval: Fetching battery info for device {udid}"
-                );
+                println!("Battery info interval: Fetching battery info for device {udid}");
 
                 utils::get_battery_info(&mut *device.diag.lock().await)
                     .await
@@ -359,7 +375,7 @@ impl qobject::ServiceManager {
                 None => {
                     eprintln!("get_cable_info: device {udid} not found");
                     let _ = qt_thread.queue(|t| {
-                        t.dev_image_mounted(false);
+                        t.dev_image_mounted(false,false);
                     });
                     return;
                 }
@@ -374,7 +390,7 @@ impl qobject::ServiceManager {
                 Err(e) => {
                     eprintln!("mount_dev_image: Failed to connect to ImageMounter for device {udid}: {e}");
                     let _ = qt_thread.queue(|t| {
-                        t.dev_image_mounted(false);
+                        t.dev_image_mounted(false,false);
                     });
                     return;
                 }
@@ -385,7 +401,7 @@ impl qobject::ServiceManager {
                 Err(e) => {
                     eprintln!("mount_dev_image: Failed to open image file {image} for device {udid}: {e}");
                     let _ = qt_thread.queue(|t| {
-                        t.dev_image_mounted(false);
+                        t.dev_image_mounted(false,false);
                     });
                     return;
                 }
@@ -394,7 +410,7 @@ impl qobject::ServiceManager {
             if let Err(e) = file.read_to_end(&mut buf) {
                 eprintln!("mount_dev_image: Failed to read image file {image} for device {udid}: {e}");
                 let _ = qt_thread.queue(|t| {
-                    t.dev_image_mounted(false);
+                    t.dev_image_mounted(false,false);
                 });
                 return;
             }
@@ -404,7 +420,7 @@ impl qobject::ServiceManager {
                 Err(e) => {
                     eprintln!("mount_dev_image: Failed to open signature file {signature} for device {udid}: {e}");
                     let _ = qt_thread.queue(|t| {
-                        t.dev_image_mounted(false);
+                        t.dev_image_mounted(false,false);
                     });
                     return;
                 }
@@ -414,7 +430,7 @@ impl qobject::ServiceManager {
             if let Err(e) = sig_file.read_to_end(&mut sig_buf) {
                 eprintln!("mount_dev_image: Failed to read signature file {signature} for device {udid}: {e}");
                 let _ = qt_thread.queue(|t| {
-                    t.dev_image_mounted(false);
+                    t.dev_image_mounted(false,false);
                 });
                 return;
             }
@@ -422,14 +438,20 @@ impl qobject::ServiceManager {
             match mounter.mount_developer(&buf, sig_buf).await {
                 Ok(_) => {
                     let _ = qt_thread.queue(|t| {
-                        t.dev_image_mounted(true);
+                        t.dev_image_mounted(true ,false);
                     });
+                }
+                Err(idevice::IdeviceError::DeviceLocked) => {
+                    eprintln!("mount_dev_image: Failed to mount developer image for device {udid}: device locked");
+                    let _ = qt_thread.queue(|t| {
+                        t.dev_image_mounted(false,true);
+                    }).ok(); 
                 }
                 Err(e) => {
                     eprintln!("mount_dev_image: Failed to mount developer image for device {udid}: {e}");
                     let _ = qt_thread.queue(|t| {
-                        t.dev_image_mounted(false);
-                    });
+                        t.dev_image_mounted(false,false);
+                    }).ok();
                 }
             };
 
@@ -451,10 +473,10 @@ impl qobject::ServiceManager {
             let device = match maybe_device {
                 Some(d) => d,
                 None => {
-                    eprintln!("get_cable_info: device {udid} not found");
+                    eprintln!("get_mounted_image: device {udid} not found");
                     let _ = qt_thread.queue(|t| {
-                        t.mounted_image_retrieved(QByteArray::default(), 0);
-                    });
+                        t.mounted_image_retrieved(false,false,QByteArray::default(), 0);
+                    }).ok();
                     return;
                 }
             };
@@ -466,10 +488,10 @@ impl qobject::ServiceManager {
             } {
                 Ok(m) => m,
                 Err(e) => {
-                    eprintln!("mount_dev_image: Failed to connect to ImageMounter for device {udid}: {e}");
+                    eprintln!("get_mounted_image: Failed to connect to ImageMounter for device {udid}: {e}");
                     let _ = qt_thread.queue(|t| {
-                        t.mounted_image_retrieved(QByteArray::default(), 0);
-                    });
+                        t.mounted_image_retrieved(false,false,QByteArray::default(), 0);
+                    }).ok();
                     return;
                 }
             };
@@ -477,14 +499,26 @@ impl qobject::ServiceManager {
             match mounter.lookup_image("Developer").await {
                 Ok(res) => {
                     let _  = qt_thread.queue(move|t| {
-                        t.mounted_image_retrieved(QByteArray::from(&res[..]), res.len() as u64);
-                    });
+                        t.mounted_image_retrieved(true,false,QByteArray::from(&res[..]), res.len() as u64);
+                    }).ok();
+                }
+                Err(idevice::IdeviceError::DeviceLocked) => {
+                    eprintln!("get_mounted_image: Failed to lookup mounted developer image for device {udid}: device locked");
+                    let _ = qt_thread.queue(|t| {
+                        t.mounted_image_retrieved(false,true,QByteArray::default(), 0);
+                    }).ok(); 
+                }
+                Err(idevice::IdeviceError::NotFound) => {
+                    eprintln!("get_mounted_image: No mounted developer image found for device {udid}");
+                    let _ = qt_thread.queue(|t| {
+                        t.mounted_image_retrieved(true,false,QByteArray::default(), 0);
+                    }).ok();
                 }
                 Err(e) => {
                     eprintln!("get_mounted_image: Failed to lookup mounted developer image for device {udid}: {e}");
                     let _ = qt_thread.queue(|t| {
-                        t.mounted_image_retrieved(QByteArray::default(), 0);
-                    });
+                        t.mounted_image_retrieved(false,false,QByteArray::default(), 0);
+                    }).ok();
                 }
             };
 
@@ -497,25 +531,24 @@ impl qobject::ServiceManager {
 
         RUNTIME.spawn(async move {
             let qt_thread = qt_t.clone();
-            let maybe_device = APP_DEVICE_STATE
-                .lock()
-                .await
-                .get(udid.as_str())
-                .cloned();
-
-            let device = match maybe_device {
-                Some(d) => d,
-                None => {
-                    eprintln!("get_cable_info: device {udid} not found");
-                    let _ = qt_thread.queue(|t| {
-                        t.developer_mode_option_revealed(false);
-                    });
-                    return;
-                }
-            };
-
-
+            
             let mut amfi_client = match {
+                let maybe_device = APP_DEVICE_STATE
+                    .lock()
+                    .await
+                    .get(udid.as_str())
+                    .cloned();
+    
+                let device = match maybe_device {
+                    Some(d) => d,
+                    None => {
+                        eprintln!("get_cable_info: device {udid} not found");
+                        let _ = qt_thread.queue(|t| {
+                            t.developer_mode_option_revealed(false);
+                        }).ok();
+                        return;
+                    }
+                };
                 let provider_guard = device.provider.lock().await;
                 let provider_ref: &dyn IdeviceProvider = provider_guard.as_ref();
                 amfi::AmfiClient::connect(provider_ref).await
@@ -525,7 +558,7 @@ impl qobject::ServiceManager {
                     eprintln!("reveal_developer_mode_option_in_ui: Failed to connect to AMFI service for device {udid}: {e}");
                     let _ = qt_thread.queue(|t| {
                         t.developer_mode_option_revealed(false);
-                    });
+                    }).ok();
                     return;
                 }
             };
@@ -535,13 +568,13 @@ impl qobject::ServiceManager {
                 Ok(_) => {
                     let _ = qt_thread.queue(|t| {
                         t.developer_mode_option_revealed(true);
-                    });
+                    }).ok();
                 }
                 Err(e) => {
                     eprintln!("reveal_developer_mode_option_in_ui: Failed to reveal developer mode option in UI for device {udid}: {e}");
                     let _ = qt_thread.queue(|t| {
                         t.developer_mode_option_revealed(false);
-                    });
+                    }).ok();
             }
 
             }
@@ -805,7 +838,7 @@ impl qobject::ServiceManager {
             match utils::calculate_apps_usage(&mut instproxy).await {
                 Ok(apps_usage) => {
                     
-                    if (skip_gallery_usage) {
+                    if skip_gallery_usage {
                         qt_thread.queue(move |t| {
                             t.disk_usage_retrieved(true, apps_usage, 0);
                         }).ok();
@@ -863,6 +896,243 @@ impl qobject::ServiceManager {
 
         });
     }
+
+    fn restart(&self) -> bool {
+        let udid = self.get_udid().to_string();
+
+        run_sync(async move {
+            let maybe_device = APP_DEVICE_STATE
+                .lock()
+                .await
+                .get(udid.as_str())
+                .cloned();
+
+            let device = match maybe_device {
+                Some(d) => d,
+                None => {
+                    eprintln!("restart: device {udid} not found");
+                    return false;
+                }
+            };
+
+            if let Err(e) = device.diag.lock().await.restart().await {
+                eprintln!("restart: Failed to restart device {udid}: {e}");
+                return false
+            }
+            return true;
+        })
+    }
+
+    fn shutdown(&self) -> bool {
+        let udid = self.get_udid().to_string();
+
+        run_sync(async move {
+            let maybe_device = APP_DEVICE_STATE
+                .lock()
+                .await
+                .get(udid.as_str())
+                .cloned();
+
+            let device = match maybe_device {
+                Some(d) => d,
+                None => {
+                    eprintln!("shutdown: device {udid} not found");
+                    return false;
+                }
+            };
+
+            if let Err(e) = device.diag.lock().await.shutdown().await {
+                eprintln!("shutdown: Failed to shutdown device {udid}: {e}");
+                return false
+            }
+            return true;
+        })
+    }
+    fn enter_recovery_mode(&self) -> bool {
+        let udid = self.get_udid().to_string();
+
+        run_sync(async move {
+            let maybe_device = APP_DEVICE_STATE
+                .lock()
+                .await
+                .get(udid.as_str())
+                .cloned();
+
+            let device = match maybe_device {
+                Some(d) => d,
+                None => {
+                    eprintln!("enter_recovery_mode: device {udid} not found");
+                    return false;
+                }
+            };
+
+            if let Err(e) = device.lockdown.lock().await.enter_recovery().await {
+                eprintln!("enter_recovery_mode: Failed to enter recovery mode for device {udid}: {e}");
+                return false
+            }
+            return true;
+        })
+    }
+
+    fn install_ipa(&self, local_ipa_path: &QString) {
+        let udid = self.get_udid().to_string();
+        let qt_t = self.qt_thread();
+        let local_ipa_path_owned = local_ipa_path.clone().to_string();
+        // FIXME: this is a bit hacky 
+        let ipa_path_on_device = format!("/PublicStaging/{}", local_ipa_path.to_string().split('/').last().unwrap_or("app.ipa"));
+        RUNTIME.spawn(async move {
+            let qt_thread = qt_t.clone();
+            
+            let mut ins_client = match {
+                let maybe_device = APP_DEVICE_STATE
+                    .lock()
+                    .await
+                    .get(udid.as_str())
+                    .cloned();
+    
+                let device = match maybe_device {
+                    Some(d) => d,
+                    None => {
+                        eprintln!("install_ipa: device {udid} not found");
+                        qt_thread.queue(move |t| {
+                            t.install_ipa_init(false, QString::from("Device not found"));
+                        }).ok();
+                        return;
+                    }
+                };
+
+                let mut afc = device.afc.lock().await;
+                
+                // Create the staging directory
+                match utils::ensure_public_staging(&mut afc).await {
+                    Ok(_) => (),
+                    Err(e) => {
+                        eprintln!("install_ipa: Failed to ensure /PublicStaging directory exists on device {udid}: {e}");
+                        qt_thread.queue(move |t| {
+                            t.install_ipa_init(false, QString::from("Failed to prepare device for IPA upload"));
+                        }).ok();
+                        return;
+                    }
+                };
+
+                match std::fs::exists(&local_ipa_path_owned)  {
+                    Ok(true) => (),
+                    Ok(false) => {
+                        eprintln!("install_ipa: IPA file not found at path {local_ipa_path_owned}");
+                        qt_thread.queue(move |t| {
+                            t.install_ipa_init(false, QString::from("IPA file not found"));
+                        }).ok();
+                        return;
+                    }
+                    Err(e) => {
+                        eprintln!("install_ipa: Failed to check if IPA file exists at path {local_ipa_path_owned}: {e}");
+                        qt_thread.queue(move |t| {
+                            t.install_ipa_init(false, QString::from("Failed to access IPA file"));
+                        }).ok();
+                        return;
+                    }
+                }
+
+
+
+                match afc.open(&ipa_path_on_device, AfcFopenMode::WrOnly).await {
+                    Ok(mut fd) => {
+                        let mut local_file = match std::fs::File::open(&local_ipa_path_owned) {
+                            Ok(f) => f,
+                            Err(e) => {
+                                eprintln!("install_ipa: Failed to open local IPA file for device {udid}: {e}");
+                                qt_thread.queue(move |t| {
+                                    t.install_ipa_init(false, QString::from("Failed to open local IPA file"));
+                                }).ok();
+                                return;
+                            }
+                        };
+
+                        let mut file_btytes = Vec::new();
+                        match local_file.read_to_end(&mut file_btytes) {
+                            Ok(bytes) => bytes,
+                            Err(e) => {
+                                eprintln!("install_ipa: Failed to read local IPA file for device {udid}: {e}");
+                                qt_thread.queue(move |t| {
+                                    t.install_ipa_init(false, QString::from("Failed to read local IPA file"));
+                                }).ok();
+                                return;
+                            }
+                        };
+
+                        if let Err(e) = fd.write_entire(&file_btytes).await {
+                            eprintln!("install_ipa: Failed to upload IPA to device {udid}: {e}");
+                            qt_thread.queue(move |t| {
+                                t.install_ipa_init(false, QString::from("Failed to upload IPA to device"));
+                            }).ok();
+                            return;
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("install_ipa: Failed to create file on device {udid} for IPA upload: {e}");
+                        qt_thread.queue(move |t| {
+                            t.install_ipa_init(false, QString::from("Failed to create file on device for IPA upload"));
+                        }).ok();
+                        return;
+                    }
+                }
+
+
+
+                let provider_guard = device.provider.lock().await;
+                let provider_ref: &dyn IdeviceProvider = provider_guard.as_ref();
+                InstallationProxyClient::connect(provider_ref).await
+            } {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("install_ipa: Failed to connect to InstallationProxy service for device {udid}: {e}");
+                    qt_thread.queue(move |t| {
+                        t.install_ipa_init(false, QString::from("Failed to connect to Installation Proxy"));
+                    }).ok();
+                    return;
+                }
+            };
+
+            qt_thread.queue(move |t| {
+                t.install_ipa_init(true, QString::from("Connected to Installation Proxy"));
+            }).ok();
+
+            let state = String::from("Installing IPA");
+
+            let res = ins_client
+                .install_with_callback(
+                    ipa_path_on_device,
+                    None,
+                    move |(percent, state)| {
+                        let qt_thread = qt_thread.clone();
+                        async move {
+                            let progress = percent as f64 / 100.0;
+
+                            qt_thread
+                                .queue(move |t| {
+                                    t.install_ipa_progress(
+                                        progress,
+                                        QString::from(&state),
+                                    );
+                                })
+                                .ok();
+
+                            println!(
+                                "Installation progress: {percent}%"
+                            );
+                        }
+                    },
+                    state,
+                )
+                .await;
+
+            if let Err(e) = res {
+                eprintln!("install_ipa: Failed to install IPA on device {udid}: {e}");
+            } else {
+                println!("install_ipa: Successfully initiated installation on device {udid}");
+            }
+        });
+    }
 }
 
 async fn set_device_location_lockdown(
@@ -870,7 +1140,6 @@ async fn set_device_location_lockdown(
     latitude: &str,
     longitude: &str,
 ) -> Result<(), idevice::IdeviceError> {
-    // iOS 16 and below: use lockdown-based LocationSimulation service
     let mut client = LocationSimulationService::connect(provider).await?;
     client.set(latitude, longitude).await
 }
