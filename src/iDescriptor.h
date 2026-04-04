@@ -18,6 +18,14 @@
  */
 
 #pragma once
+/* required for mingw64 */
+#ifdef WIN32
+#include <cstdint>
+using u_int8_t = uint8_t;
+using u_int16_t = uint16_t;
+using u_int32_t = uint32_t;
+using u_int64_t = uint64_t;
+#endif
 #include <QDebug>
 #include <QImage>
 #include <QJsonObject>
