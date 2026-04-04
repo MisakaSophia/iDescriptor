@@ -321,9 +321,9 @@ bool DevDiskManager::isImageDownloaded(const QString &version,
     return QFile::exists(dmgPath) && QFile::exists(sigPath);
 }
 
-bool DevDiskManager::downloadCompatibleImage(
+QString DevDiskManager::downloadCompatibleImage(
     const std::shared_ptr<iDescriptorDevice> device,
-    std::function<void(bool)> callback)
+    std::function<void(bool, const QString &)> callback)
 {
     QString path = SettingsManager::sharedInstance()->mkDevDiskImgPath();
     unsigned int deviceMajorVersion =
@@ -338,8 +338,8 @@ bool DevDiskManager::downloadCompatibleImage(
     if (images.isEmpty()) {
         qDebug() << "No images found for device version:" << deviceMajorVersion
                  << "." << deviceMinorVersion;
-        callback(false);
-        return false;
+        callback(false, "");
+        return "";
     }
 
     for (const ImageInfo &info : images) {
@@ -348,8 +348,8 @@ bool DevDiskManager::downloadCompatibleImage(
             continue;
         }
         if (info.isDownloaded) {
-            callback(true);
-            return true;
+            callback(true, info.version);
+            return info.version;
         }
     }
 
@@ -364,7 +364,7 @@ bool DevDiskManager::downloadCompatibleImage(
                  callback](const QString &finishedVersion, bool success,
                            const QString &errorMessage) {
                     if (finishedVersion == versionToDownload) {
-                        callback(success);
+                        callback(success, versionToDownload);
                     }
                 },
                 Qt::SingleShotConnection);
@@ -392,129 +392,13 @@ bool DevDiskManager::downloadCompatibleImage(
 
             m_activeDownloads[downloadItem->dmgReply] = downloadItem;
             m_activeDownloads[downloadItem->sigReply] = downloadItem;
-            return true; // Indicate that the async operation has started
+            return versionToDownload;
         }
     }
 
-    // qDebug() << "No compatible image found to mount on device:"
-    //          << device->udid.c_str();
+    qDebug() << "No compatible image found to mount on device:" << device->udid;
 
-    return false;
-}
-
-// FIXME: wire this up properly
-bool DevDiskManager::mountCompatibleImage(const iDescriptorDevice *device)
-{
-    QString path = SettingsManager::sharedInstance()->mkDevDiskImgPath();
-
-    QList<ImageInfo> images =
-        parseImageList(path, device->deviceInfo.parsedDeviceVersion.major,
-                       device->deviceInfo.parsedDeviceVersion.minor, "", 0);
-
-    return false;
-    // 1. Try to mount an already downloaded compatible image
-    // for (const ImageInfo &info : images) {
-    //     if (info.compatibility != ImageCompatibility::Compatible &&
-    //         info.compatibility != ImageCompatibility::MaybeCompatible) {
-    //         continue;
-    //     }
-    //     if (info.isDownloaded) {
-    //         qDebug() << "There is a compatible image already downloaded:"
-    //                  << info.version;
-    //         qDebug() << "Attempting to mount image version" << info.version
-    //                  << "on device:" << device->udid.c_str();
-    //         if (MOBILE_IMAGE_MOUNTER_E_SUCCESS ==
-    //             mountImage(info.version, device)) {
-    //             qDebug() << "Mounted existing image version" << info.version
-    //                      << "on device:" << device->udid.c_str();
-    //             return true;
-    //         } else {
-    //             qDebug() << "Failed to mount existing image version"
-    //                      << info.version
-    //                      << "on device:" << device->udid.c_str();
-    //             return false;
-    //         }
-    //     }
-    // }
-
-    // // 2. If none are downloaded, download the newest compatible one
-    // for (const ImageInfo &info : images) {
-    //     if (info.compatibility == ImageCompatibility::Compatible ||
-    //         info.compatibility == ImageCompatibility::MaybeCompatible) {
-    //         const QString versionToDownload = info.version;
-    //         qDebug()
-    //             << "No compatible image found locally. Downloading version:"
-    //             << versionToDownload;
-
-    //         connect(
-    //             this, &DevDiskManager::imageDownloadFinished, this,
-    //             [this, device, path,
-    //              versionToDownload](const QString &finishedVersion,
-    //                                 bool success, const QString
-    //                                 &errorMessage) {
-    //                 if (success && finishedVersion == versionToDownload) {
-    //                     qDebug() << "Download finished for" <<
-    //                     finishedVersion
-    //                              << ". Now attempting to mount.";
-    //                     mountImage(finishedVersion, device);
-    //                 } else if (!success) {
-    //                     qDebug() << "Failed to download" << finishedVersion
-    //                              << ":" << errorMessage;
-    //                 }
-    //             },
-    //             Qt::SingleShotConnection);
-
-    //         // Start the download
-    //         QPair<QNetworkReply *, QNetworkReply *> replies =
-    //             downloadImage(versionToDownload);
-    //         auto *downloadItem = new DownloadItem();
-    //         downloadItem->version = versionToDownload;
-    //         downloadItem->downloadPath = path;
-    //         downloadItem->dmgReply = replies.first;
-    //         downloadItem->sigReply = replies.second;
-
-    //         connect(downloadItem->dmgReply, &QNetworkReply::downloadProgress,
-    //                 this, &DevDiskManager::onDownloadProgress);
-    //         connect(downloadItem->dmgReply, &QNetworkReply::finished, this,
-    //                 &DevDiskManager::onFileDownloadFinished);
-    //         connect(downloadItem->sigReply, &QNetworkReply::downloadProgress,
-    //                 this, &DevDiskManager::onDownloadProgress);
-    //         connect(downloadItem->sigReply, &QNetworkReply::finished, this,
-    //                 &DevDiskManager::onFileDownloadFinished);
-
-    //         m_activeDownloads[downloadItem->dmgReply] = downloadItem;
-    //         m_activeDownloads[downloadItem->sigReply] = downloadItem;
-    //         return true; // Indicate that the async operation has started
-    //     }
-    // }
-
-    // qDebug() << "No compatible image found to mount on device:"
-    //          << device->udid.c_str();
-
-    // return false;
-}
-
-// FIXME
-bool DevDiskManager::mountImage(const QString &version,
-                                const iDescriptorDevice *device)
-{
-    const QString downloadPath =
-        SettingsManager::sharedInstance()->devdiskimgpath();
-    if (!isImageDownloaded(version, downloadPath)) {
-        return false;
-    }
-
-    QString versionPath = QDir(downloadPath).filePath(version);
-    return false;
-    // return mount_dev_image(device,
-    //                        QDir(versionPath)
-    //                            .filePath("DeveloperDiskImage.dmg")
-    //                            .toUtf8()
-    //                            .constData(),
-    //                        QDir(versionPath)
-    //                            .filePath("DeveloperDiskImage.dmg.signature")
-    //                            .toUtf8()
-    //                            .constData());
+    return "";
 }
 
 std::pair<QString, QString>
@@ -604,12 +488,6 @@ void DevDiskManager::onFileDownloadFinished()
         emit imageDownloadFinished(item->version, true);
         delete item;
     }
-}
-
-bool DevDiskManager::unmountImage()
-{
-    // TODO: Implement
-    return false;
 }
 
 bool DevDiskManager::compareSignatures(const char *signature_file_path,

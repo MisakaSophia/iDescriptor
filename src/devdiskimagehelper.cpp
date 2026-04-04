@@ -51,189 +51,179 @@ void DevDiskImageHelper::setupUI()
     mainLayout->setContentsMargins(20, 20, 20, 20);
     mainLayout->setSpacing(15);
 
-    // ZLoadingWidget handles the spinner + state switching
     m_loadingWidget = new ZLoadingWidget(true, this);
-    mainLayout->addWidget(m_loadingWidget);
+    connect(m_loadingWidget, &ZLoadingWidget::retryClicked, this,
+            &DevDiskImageHelper::onRetryButtonClicked);
 
-    // Custom error layout: message + Retry
-    auto *errorLayout = new QHBoxLayout();
-    errorLayout->addStretch();
+    auto *contentLayout = new QHBoxLayout();
+    contentLayout->addStretch();
 
-    m_statusLabel = new QLabel("An error occurred.");
+    m_statusLabel = new QLabel("Please wait...");
     m_statusLabel->setWordWrap(true);
     m_statusLabel->setAlignment(Qt::AlignCenter);
-    errorLayout->addWidget(m_statusLabel);
+    contentLayout->addWidget(m_statusLabel);
+    contentLayout->addStretch();
 
-    m_retryButton = new QPushButton("Retry");
-    connect(m_retryButton, &QPushButton::clicked, this,
-            &DevDiskImageHelper::onRetryButtonClicked);
-    errorLayout->addWidget(m_retryButton);
-
-    errorLayout->addStretch();
-
-    // Register custom error layout with ZLoadingWidget
-    m_loadingWidget->setupErrorWidget(errorLayout);
-
-    // Bottom button row (Cancel / Close)
-    auto *buttonLayout = new QHBoxLayout();
-    buttonLayout->addStretch();
-
-    m_cancelButton = new QPushButton("Cancel");
-    connect(m_cancelButton, &QPushButton::clicked, this, &QDialog::reject);
-    buttonLayout->addWidget(m_cancelButton);
-
-    buttonLayout->addStretch();
-    mainLayout->addLayout(buttonLayout);
+    m_loadingWidget->setupContentWidget(contentLayout);
+    mainLayout->addWidget(m_loadingWidget);
 
     setMinimumWidth(400);
+    setMinimumHeight(200);
     setModal(true);
+    show();
 }
 
-void DevDiskImageHelper::start()
+/* try to mount a specific version */
+void DevDiskImageHelper::mountVersion(const QString &version)
 {
-    if (m_cancelButton) {
-        m_cancelButton->setText("Cancel");
-    }
-    if (m_loadingWidget) {
-        m_loadingWidget->showLoading();
-    }
-    showStatus("Please wait...");
-
+    m_loadingWidget->stop();
+    m_statusLabel->setText("Please wait...");
+    m_version = version;
     unsigned int deviceMajorVersion =
         m_device->deviceInfo.parsedDeviceVersion.major;
 
-    // FIXME:we dont have developer disk images for ios 6 and below
-    if (deviceMajorVersion > 5) {
-        const bool isMountAvailable =
-            DevDiskManager::sharedInstance()->downloadCompatibleImage(
-                m_device, [this](bool success) {
-                    if (success) {
-                        checkAndMount();
-                    } else {
-                        finishWithError("Failed to download compatible image.");
-                    }
-                });
-        qDebug() << "isMountAvailable:" << isMountAvailable;
-        if (!isMountAvailable) {
-            finishWithError(
-                "There is no compatible developer disk image available for " +
-                QString::number(deviceMajorVersion) + ".");
-        }
-    } else {
-        showStatus("Developer disk image is not available for iOS version " +
-                       QString::number(deviceMajorVersion) +
-                       ". Please use a device with iOS 6 or above.",
-                   true);
-        return;
-    }
-}
-
-void DevDiskImageHelper::checkAndMount()
-{
     connect(
         m_device->service_manager,
         &CXX::ServiceManager::mounted_image_retrieved, this,
-        [this](QByteArray signature, u_int64_t sig_length) {
+        [this, deviceMajorVersion, version](bool success, bool locked,
+                                            QByteArray signature,
+                                            u_int64_t sig_length) {
+            if (!success) {
+                if (locked) {
+                    qDebug() << "Failed to retrieve mounted image signature: "
+                                "device is locked.";
+                    m_loadingWidget->showError(
+                        "The device appears to be locked. Please unlock the "
+                        "device and try again.");
+                    return;
+                }
+                qDebug() << "Failed to retrieve mounted image signature.";
+                m_loadingWidget->showError(
+                    "Failed to retrieve mounted image signature.");
+                return;
+            }
+
             if (!signature.isEmpty() || sig_length > 0) {
-                qDebug()
-                    << "Developer disk image already mounted with signature:"
-                    << "length:" << sig_length << "signature:" << signature;
-                finishWithSuccess();
+                m_loadingWidget->showError(
+                    "A developer disk image already mounted. "
+                    "Please restart the device and try again.");
             } else {
-                onMountButtonClicked();
+                const QString downloadPath =
+                    SettingsManager::sharedInstance()->devdiskimgpath();
+                const bool isDownloaded =
+                    DevDiskManager::sharedInstance()->isImageDownloaded(
+                        version, downloadPath);
+
+                qDebug() << "isDownloaded:" << isDownloaded;
+                if (!isDownloaded) {
+                    m_loadingWidget->showError(
+                        "The developer disk image for iOS " + version +
+                        " is not downloaded. Please download it first.");
+                } else {
+                    handleMounting(version);
+                }
             }
         },
         Qt::SingleShotConnection);
     m_device->service_manager->get_mounted_image();
 }
 
-void DevDiskImageHelper::onMountButtonClicked()
+/* mount a compatible version */
+void DevDiskImageHelper::start()
 {
-    QString path = SettingsManager::sharedInstance()->mkDevDiskImgPath();
+    m_loadingWidget->stop();
+    m_statusLabel->setText("Please wait...");
 
-    if (m_loadingWidget) {
-        m_loadingWidget->showLoading();
-    }
-
-    // Check if we need to download first
     unsigned int deviceMajorVersion =
         m_device->deviceInfo.parsedDeviceVersion.major;
-    unsigned int deviceMinorVersion =
-        m_device->deviceInfo.parsedDeviceVersion.minor;
 
-    QList<ImageInfo> images = DevDiskManager::sharedInstance()->parseImageList(
-        path, deviceMajorVersion, deviceMinorVersion, "", 0);
-
-    // Check if compatible image is downloaded
-    bool hasDownloadedImage = false;
-    QString versionToMount;
-
-    for (const ImageInfo &info : images) {
-        if (info.compatibility == ImageCompatibility::Compatible ||
-            info.compatibility == ImageCompatibility::MaybeCompatible) {
-            if (info.isDownloaded) {
-                hasDownloadedImage = true;
-                versionToMount = info.version;
-                break;
-            }
-        }
-    }
-
-    if (hasDownloadedImage) {
-        // // Mount directly
-        m_downloadingVersion = versionToMount;
-        showStatus("Mounting developer disk image...");
-        onImageDownloadFinished(versionToMount, true, "");
+    // FIXME:we dont have developer disk images for ios 6 and below
+    if (deviceMajorVersion > 5) {
+        checkAndMount();
     } else {
-        // Need to download first
-        showStatus(
-            "Downloading developer disk image...\nThis may take a moment.");
-
-        // Connect to download signals
-        connect(DevDiskManager::sharedInstance(),
-                &DevDiskManager::imageDownloadFinished, this,
-                &DevDiskImageHelper::onImageDownloadFinished,
-                Qt::UniqueConnection);
-
-        // Find version to download
-        for (const ImageInfo &info : images) {
-            if (info.compatibility == ImageCompatibility::Compatible ||
-                info.compatibility == ImageCompatibility::MaybeCompatible) {
-                m_downloadingVersion = info.version;
-                break;
-            }
-        }
+        m_loadingWidget->showError(
+            "Developer disk image is not available for iOS version " +
+            QString::number(deviceMajorVersion) +
+            ". Please use a device with iOS 6 or above.");
+        return;
     }
 }
 
-void DevDiskImageHelper::onImageDownloadFinished(const QString &version,
-                                                 bool success,
-                                                 const QString &errorMessage)
+void DevDiskImageHelper::checkAndMount()
 {
-    if (version != m_downloadingVersion) {
-        qDebug() << "Ignoring download finished for version" << version
-                 << "expected" << m_downloadingVersion;
-        return;
-    }
+    unsigned int deviceMajorVersion =
+        m_device->deviceInfo.parsedDeviceVersion.major;
 
-    if (!success) {
-        showRetryUI("Failed to download developer disk image:\n" +
-                    errorMessage);
-        return;
-    }
+    connect(
+        m_device->service_manager,
+        &CXX::ServiceManager::mounted_image_retrieved, this,
+        [this, deviceMajorVersion](bool success, bool locked,
+                                   QByteArray signature, u_int64_t sig_length) {
+            qDebug() << "[ DevDiskImageHelper::checkAndMount] qobject::connect "
+                        "of mounted_image_retrieved consumed";
+            if (!success) {
+                if (locked) {
+                    qDebug() << "Failed to retrieve mounted image signature: "
+                                "device is locked.";
+                    m_loadingWidget->showError(
+                        "The device appears to be locked. Please unlock the "
+                        "device and try again.");
+                    return;
+                }
+                qDebug() << "Failed to retrieve mounted image info.";
+                m_loadingWidget->showError(
+                    "Failed to retrieve mounted image info.");
+                return;
+            }
 
-    showStatus("Download complete. Mounting...");
-
+            if (!signature.isEmpty() || sig_length > 0) {
+                qDebug()
+                    << "Developer disk image already mounted with signature:"
+                    << "length:" << sig_length << "signature:" << signature;
+                finishWithSuccess();
+            } else {
+                const QString version =
+                    DevDiskManager::sharedInstance()->downloadCompatibleImage(
+                        m_device, [this](bool success, const QString &version) {
+                            if (success) {
+                                handleMounting(version);
+                            } else {
+                                m_loadingWidget->showError(
+                                    "Failed to download compatible image.");
+                            }
+                        });
+                m_version = version;
+                qDebug() << "Is there a compatible image ?"
+                         << !version.isEmpty();
+                if (version.isEmpty()) {
+                    // FIXME: we need to disable the retry button in this case
+                    m_loadingWidget->showError(
+                        "There is no compatible developer disk "
+                        "image available for " +
+                        QString::number(deviceMajorVersion) + ".");
+                } else {
+                    m_statusLabel->setText(
+                        QString("Downloading compatible developer disk "
+                                "image for iOS %1..")
+                            .arg(deviceMajorVersion));
+                }
+            }
+        },
+        Qt::SingleShotConnection);
+    m_device->service_manager->get_mounted_image();
+}
+// todo called twice
+//  finishWithSuccess called with wait = false
+void DevDiskImageHelper::handleMounting(const QString &version)
+{
+    m_statusLabel->setText("Mounting...");
     auto paths = DevDiskManager::sharedInstance()->getPathsForVersion(version);
     qDebug() << "Mounting image with paths:" << paths.first << paths.second;
 
-    // FIXME
-    // err->code == DeviceLockedMountErrorCode
-    // check for error code
     connect(
         m_device->service_manager, &CXX::ServiceManager::dev_image_mounted,
         this,
-        [this](bool success) {
+        [this](bool success, bool isLocked) {
             qDebug() << "[devdiskimagehelper] : Developer disk image "
                         "mount result:"
                      << success;
@@ -242,12 +232,25 @@ void DevDiskImageHelper::onImageDownloadFinished(const QString &version,
                             "mounted successfully.";
                 finishWithSuccess(true);
             } else {
-                qDebug() << "[devdiskimagehelper] : Failed to mount developer "
-                            "disk image.";
-                showRetryUI(
-                    "Failed to mount developer disk image.\n"
-                    "Please ensure the device is unlocked and using a genuine "
-                    "cable.");
+                if (isLocked) {
+                    qDebug() << "[devdiskimagehelper] : Failed to mount "
+                                "developer disk image: device is locked.";
+                    m_loadingWidget->showError(
+                        "Failed to mount developer disk image.\n"
+                        "The device appears to be locked. Please unlock the "
+                        "device and try again.");
+                    return;
+                } else {
+
+                    qDebug()
+                        << "[devdiskimagehelper] : Failed to mount developer "
+                           "disk image.";
+                    m_loadingWidget->showError(
+                        "Failed to mount developer disk image.\n"
+                        "Please ensure the device is unlocked and "
+                        "using a genuine "
+                        "cable.");
+                }
             }
         },
         Qt::SingleShotConnection);
@@ -255,41 +258,18 @@ void DevDiskImageHelper::onImageDownloadFinished(const QString &version,
     m_device->service_manager->mount_dev_image(paths.first, paths.second);
 }
 
-void DevDiskImageHelper::showRetryUI(const QString &errorMessage)
-{
-    if (m_statusLabel) {
-        m_statusLabel->setText(errorMessage);
-    }
-    if (m_loadingWidget) {
-        m_loadingWidget->showError();
-    }
-    if (m_cancelButton) {
-        m_cancelButton->setText("Close");
-    }
-}
-
 void DevDiskImageHelper::onRetryButtonClicked()
 {
-    if (m_cancelButton) {
-        m_cancelButton->setText("Cancel");
-    }
-    if (m_loadingWidget) {
-        m_loadingWidget->showLoading();
-    }
-    QTimer::singleShot(200, this, &DevDiskImageHelper::start);
-}
+    m_loadingWidget->showLoading();
 
-void DevDiskImageHelper::showStatus(const QString &message, bool isError)
-{
-    if (isError) {
-        showRetryUI(message);
-    } else {
-        if (m_statusLabel) {
-            m_statusLabel->setText(message);
+    QTimer::singleShot(200, this, [this]() {
+        if (!m_version.isEmpty()) {
+            qDebug() << "Retrying mount for version:" << m_version;
+            mountVersion(m_version);
+        } else {
+            start();
         }
-    }
-
-    show();
+    });
 }
 
 /*
@@ -310,9 +290,4 @@ void DevDiskImageHelper::finishWithSuccess(bool wait)
         return QTimer::singleShot(3000, handler);
     }
     handler();
-}
-
-void DevDiskImageHelper::finishWithError(const QString &errorMessage)
-{
-    showRetryUI(errorMessage);
 }

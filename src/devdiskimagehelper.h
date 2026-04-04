@@ -22,6 +22,7 @@
 
 #include "iDescriptor-ui.h"
 #include "iDescriptor.h"
+#include "settingsmanager.h"
 #include <QDialog>
 #include <QLabel>
 #include <QPushButton>
@@ -38,7 +39,18 @@ public:
 
     // Start the mounting process
     void start();
+    void mountVersion(const QString &version);
 
+    static bool
+    canMountForDevice(const std::shared_ptr<iDescriptorDevice> device)
+    {
+        /*
+            iOS 17 and later are not supported
+            even though there are some images called "Personalized Disk Images"
+            but we dont support them for now
+        */
+        return device->ios_version < 17;
+    }
 signals:
     void mountingCompleted(bool success);
     void downloadStarted();
@@ -46,27 +58,22 @@ signals:
 
 private slots:
     void checkAndMount();
-    void onMountButtonClicked();
     void onRetryButtonClicked();
-    void onImageDownloadFinished(const QString &version, bool success,
-                                 const QString &errorMessage);
 
 private:
     void setupUI();
-    void showStatus(const QString &message, bool isError = false);
-    void showMountUI();
-    void showRetryUI(const QString &errorMessage);
     void finishWithSuccess(bool wait = false);
-    void finishWithError(const QString &errorMessage);
+    void handleMounting(const QString &version);
 
     const std::shared_ptr<iDescriptorDevice> m_device;
 
     QLabel *m_statusLabel;
     ZLoadingWidget *m_loadingWidget;
-    QPushButton *m_retryButton;
-    QPushButton *m_cancelButton;
 
     QString m_downloadingVersion;
+
+    // set when called with mountVersion
+    QString m_version = QString();
 };
 
 #endif // DEVDISKIMAGEHELPER_H

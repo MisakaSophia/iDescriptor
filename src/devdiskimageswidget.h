@@ -20,6 +20,7 @@
 #ifndef DEVDISKIMAGESWIDGET_H
 #define DEVDISKIMAGESWIDGET_H
 
+#include "devdiskimagehelper.h"
 #include "iDescriptor-ui.h"
 #include "iDescriptor.h"
 #include "qprocessindicator.h"
