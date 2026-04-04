@@ -70,7 +70,7 @@
 #define COLOR_HYPERLINK QColor("#FF7FFFD4")
 #endif
 
-#define THUMBNAIL_SIZE QSize(128, 128)
+#define THUMBNAIL_SIZE QSize(256, 256)
 #define MIN_MAIN_WINDOW_SIZE QSize(900, 600)
 
 inline bool isDarkMode()
