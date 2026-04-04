@@ -66,6 +66,7 @@ private:
     QLabel *m_titleLabel;
     QLabel *m_statusLabel;
     QLabel *m_statsLabel;
+    QLabel *m_currentFileLabel;
     QProgressBar *m_progressBar;
     QPushButton *m_actionButton;
     QPushButton *m_cancelButton;

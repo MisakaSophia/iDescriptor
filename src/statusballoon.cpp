@@ -44,6 +44,7 @@ BalloonProcess::BalloonProcess(std::shared_ptr<ProcessItem> item,
     // Title
     m_titleLabel = new QLabel(m_item->title);
     QFont titleFont = m_titleLabel->font();
+    m_titleLabel->setWordWrap(true);
     titleFont.setBold(true);
     m_titleLabel->setFont(titleFont);
 
@@ -89,10 +90,18 @@ BalloonProcess::BalloonProcess(std::shared_ptr<ProcessItem> item,
     m_progressBar->setFixedHeight(12);
     layout->addWidget(m_progressBar);
 
+    // Current file
+    m_currentFileLabel = new QLabel();
+    m_currentFileLabel->setWordWrap(true);
+    QFont currentFileFont = m_currentFileLabel->font();
+    currentFileFont.setPointSize(currentFileFont.pointSize() - 1);
+    m_currentFileLabel->setFont(currentFileFont);
+    layout->addWidget(m_currentFileLabel);
+
     // Stats
     m_statsLabel = new QLabel();
     QFont statsFont = m_statsLabel->font();
-    statsFont.setPointSize(statsFont.pointSize() - 1);
+    statsFont.setPointSize(statsFont.pointSize() - 2);
     m_statsLabel->setFont(statsFont);
     layout->addWidget(m_statsLabel);
 
@@ -146,6 +155,7 @@ void BalloonProcess::onCancelClicked()
 {
     m_cancelButton->setEnabled(false);
     m_cancelButton->setText("Cancelling...");
+    // FIXME
     // ExportManager::sharedInstance()->cancel(m_item->jobId);
 }
 
@@ -168,6 +178,8 @@ void BalloonProcess::updateUI()
         int progress = (m_item->transferredBytes * 100) / m_item->totalBytes;
         m_progressBar->setValue(progress);
     }
+
+    m_currentFileLabel->setText(m_item->currentFile);
 
     QString statsText = QString("%1 of %2 items")
                             .arg(m_item->completedItems)
@@ -452,7 +464,7 @@ QUuid StatusBalloon::startProcess(const QString &title, int totalItems,
     handleShow(true);
 
     auto item = std::make_shared<ProcessItem>();
-    item->processId = QUuid::createUuid();
+    item->processId = jobId;
     item->type = type;
     item->status = ProcessStatus::Running;
     item->title = title;
