@@ -79,21 +79,25 @@ public:
         if (enabled) {
             setStyleSheet("QWidget#toolboxFrame { "
                           "padding: 5px; }");
+            setEnabled(true);
         } else {
             setStyleSheet("QWidget#toolboxFrame { "
                           "padding: 5px;"
                           "opacity: 0.45;  }");
+            setEnabled(false);
         }
 #else
         if (enabled) {
             setStyleSheet("QWidget#toolboxFrame { padding: 5px; "
                           "border: none; outline: none; }");
             setCursor(Qt::PointingHandCursor);
+            setEnabled(true);
         } else {
             setStyleSheet("padding: 5px;"
                           "border-radius: 8px;"
                           "color: #666;");
             setCursor(Qt::ArrowCursor);
+            setEnabled(false);
         }
 #endif
     }
