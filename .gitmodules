@@ -10,6 +10,3 @@
 [submodule "lib/uxplay"]
 	path = lib/uxplay
 	url = https://github.com/iDescriptor/uxplay.git
-[submodule "lib/zupdater"]
-	path = lib/zupdater
-	url = https://github.com/libZQT/zupdater.git
