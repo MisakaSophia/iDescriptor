@@ -3,6 +3,7 @@
 
 #include "iDescriptor-ui.h"
 #include "iDescriptor.h"
+#include "iomanagerclient.h"
 #include "qballoontip.h"
 #include <QBasicTimer>
 #include <QDateTime>
@@ -61,6 +62,7 @@ private:
 
     std::shared_ptr<ProcessItem> m_item;
     QDateTime m_lastUpdateTime;
+    QString m_lastSpeedText;
     qint64 m_lastBytesTransferred;
 
     QLabel *m_titleLabel;

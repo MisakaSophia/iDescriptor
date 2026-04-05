@@ -155,16 +155,14 @@ void BalloonProcess::onCancelClicked()
 {
     m_cancelButton->setEnabled(false);
     m_cancelButton->setText("Cancelling...");
-    // FIXME
-    // ExportManager::sharedInstance()->cancel(m_item->jobId);
+    IOManagerClient::sharedInstance()->cancel(m_item->processId);
 }
 
 void BalloonProcess::updateUI()
 {
     QString statusText;
     if (m_item->status == ProcessStatus::Running) {
-        statusText = m_item->currentFile.isEmpty() ? "Processing..."
-                                                   : m_item->currentFile;
+        statusText = m_item->currentFile.isEmpty() ? "Starting..." : "Running";
     } else if (m_item->status == ProcessStatus::Completed) {
         statusText = "Completed successfully";
     } else if (m_item->status == ProcessStatus::Failed) {
@@ -190,20 +188,32 @@ void BalloonProcess::updateUI()
 
     if (m_item->status == ProcessStatus::Running &&
         m_item->transferredBytes > 0) {
+
         QDateTime now = QDateTime::currentDateTime();
+        const int minIntervalMs = 750;
+
         qint64 elapsed = m_lastUpdateTime.msecsTo(now);
-        if (elapsed > 0) {
-            qint64 bytesDiff =
-                m_item->transferredBytes - m_lastBytesTransferred;
-            qint64 bytesPerSecond = (bytesDiff * 1000) / elapsed;
-            if (bytesPerSecond > 0) {
-                statsText += " • " + iDescriptor::Utils::formatTransferRate(
-                                         bytesPerSecond);
+        // debounced transfer rate
+        if (!m_lastUpdateTime.isValid() || elapsed >= minIntervalMs) {
+            if (elapsed > 0) {
+                qint64 bytesDiff =
+                    m_item->transferredBytes - m_lastBytesTransferred;
+                qint64 bytesPerSecond = (bytesDiff * 1000) / elapsed;
+                if (bytesPerSecond > 0) {
+                    m_lastSpeedText =
+                        " • " +
+                        iDescriptor::Utils::formatTransferRate(bytesPerSecond);
+                }
             }
             m_lastBytesTransferred = m_item->transferredBytes;
             m_lastUpdateTime = now;
         }
+
+        if (!m_lastSpeedText.isEmpty()) {
+            statsText += m_lastSpeedText; // reuse last speed until next update
+        }
     }
+
     m_statsLabel->setText(statsText);
 
     if (m_item->status == ProcessStatus::Running) {
