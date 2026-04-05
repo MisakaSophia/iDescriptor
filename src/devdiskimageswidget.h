@@ -53,6 +53,7 @@ private slots:
     void onMountButtonClicked();
     void onImageListFetched(bool success,
                             const QString &errorMessage = QString());
+    void onItemSelectionChanged();
 
 private:
     void setupUi();

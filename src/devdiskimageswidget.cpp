@@ -71,6 +71,9 @@ DevDiskImagesWidget::DevDiskImagesWidget(const QString &deviceUdid,
             [this](QListWidgetItem *item) {
                 m_mountButton->setEnabled(item != nullptr);
             });
+
+    connect(m_imageListWidget, &QListWidget::itemSelectionChanged, this,
+            &DevDiskImagesWidget::onItemSelectionChanged);
 }
 
 void DevDiskImagesWidget::setupUi()
@@ -593,6 +596,13 @@ void DevDiskImagesWidget::mountImage(const QString &version)
         return;
     }
 
+    if (device->ios_version >= 17) {
+        QMessageBox::warning(this, "Unsupported iOS Version",
+                             "Mounting developer disk images is not supported "
+                             "on iOS 17 and later.");
+        m_deviceComboBox->setEnabled(true);
+        return;
+    }
     auto *helper = new DevDiskImageHelper(device, this);
     connect(helper, &DevDiskImageHelper::finished, this, [this, helper]() {
         m_deviceComboBox->setEnabled(true);
@@ -649,6 +659,13 @@ void DevDiskImagesWidget::checkMountedImage()
         return;
     }
 
+    if (device->ios_version >= 17) {
+        QMessageBox::warning(this, "Unsupported iOS Version",
+                             "Checking mounted developer disk images is not "
+                             "supported on iOS 17 and later.");
+        return;
+    }
+
     connect(
         device->service_manager, &CXX::ServiceManager::mounted_image_retrieved,
         this,
@@ -690,4 +707,27 @@ void DevDiskImagesWidget::checkMountedImage()
         },
         Qt::SingleShotConnection);
     device->service_manager->get_mounted_image();
+}
+
+void DevDiskImagesWidget::onItemSelectionChanged()
+{
+    QColor baseColor = QApplication::palette().color(QPalette::Window);
+    QColor highlightColor = QApplication::palette().color(QPalette::Highlight);
+
+    for (int row = 0; row < m_imageListWidget->count(); ++row) {
+        auto *item = m_imageListWidget->item(row);
+        auto *w = m_imageListWidget->itemWidget(item);
+        if (!w)
+            continue;
+
+        QColor bgColor = (row % 2 == 0) ? baseColor.lighter(110) : baseColor;
+
+        if (item->isSelected()) {
+            bgColor = highlightColor;
+        }
+
+        w->setStyleSheet(
+            QStringLiteral("QWidget#itemWidget { background-color: %1; }")
+                .arg(bgColor.name()));
+    }
 }
