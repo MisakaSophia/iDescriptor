@@ -23,6 +23,7 @@
 #include "ZUpdater.h"
 #include "iDescriptor-ui.h"
 #include "iDescriptor.h"
+#include "iomanagerclient.h"
 #include "ztabwidget.h"
 #include <QLabel>
 #include <QMainWindow>

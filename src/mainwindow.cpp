@@ -464,8 +464,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
             event->ignore();
             return;
         }
-        // FIXME
-        //  ExportManager::sharedInstance()->cancelAllJobs();
+        IOManagerClient::sharedInstance()->cancelAllJobs();
     }
 
     QMainWindow::closeEvent(event);
