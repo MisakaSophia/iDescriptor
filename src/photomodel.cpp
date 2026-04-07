@@ -123,19 +123,39 @@ QVariant PhotoModel::data(const QModelIndex &index, int role) const
 }
 
 void PhotoModel::onThumbnailReady(const QString &path, const QPixmap &pixmap,
-                                  unsigned int row)
+                                  unsigned int rowHint)
 {
-    // check bounds
-    if (row < m_photos.size()) {
-        const PhotoInfo &photo = m_photos.at(row);
-        if (photo.filePath == path) {
-            QModelIndex idx = createIndex(row, 0);
-            emit dataChanged(idx, idx, {Qt::DecorationRole});
-        }
+    Q_UNUSED(pixmap);
+
+    QMutexLocker locker(&m_mutex);
+
+    int row = -1;
+
+    // if row hint still valid and matches this path
+    if (rowHint < static_cast<unsigned int>(m_photos.size()) &&
+        m_photos.at(static_cast<int>(rowHint)).filePath == path) {
+        row = static_cast<int>(rowHint);
     } else {
-        // FIXME: happens when we filter down to videos only
-        qDebug() << "Out of bounds in PhotoModel::onThumbnailReady";
+        // fallback: search by path in current model
+        for (int i = 0; i < m_photos.size(); ++i) {
+            if (m_photos.at(i).filePath == path) {
+                row = i;
+                break;
+            }
+        }
     }
+
+    if (row == -1) {
+        // Thumbnail arrived for an item that is no longer in the model
+        qDebug() << "PhotoModel::onThumbnailReady: path not in current model:"
+                 << path << "(rowHint =" << rowHint
+                 << ", size =" << m_photos.size() << ")";
+        return;
+    }
+
+    QModelIndex idx = createIndex(row, 0);
+    locker.unlock(); // avoid holding mutex while emitting
+    emit dataChanged(idx, idx, {Qt::DecorationRole});
 }
 
 bool PhotoModel::populatePhotoPaths()
@@ -294,6 +314,7 @@ PhotoInfo::FileType PhotoModel::determineFileType(const QString &fileName) const
     return PhotoInfo::Image;
 }
 
+int count = 0;
 void PhotoModel::setAlbumPath(const QString &albumPath)
 {
     qDebug() << "Setting new album path:" << albumPath;
@@ -313,9 +334,9 @@ void PhotoModel::setAlbumPath(const QString &albumPath)
                              << m_albumPath;
                     emit albumPathSet();
                 } else {
-                    // qDebug() << "Failed to populate photo paths for album:"
-                    //          << m_albumPath;
-                    // emit albumPathFailed();
+                    qDebug() << "Failed to populate photo paths for album:"
+                             << m_albumPath;
+                    emit albumPathSetFailed();
                 }
             });
 }

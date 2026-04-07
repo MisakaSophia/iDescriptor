@@ -109,7 +109,7 @@ private slots:
 
 signals:
     void albumPathSet();
-    void timedOut();
+    void albumPathSetFailed();
 };
 
 #endif // PHOTOMODEL_H

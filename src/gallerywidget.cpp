@@ -70,20 +70,28 @@ GalleryWidget::GalleryWidget(const std::shared_ptr<iDescriptorDevice> device,
     // Add stacked widget to main layout
     setLayout(m_mainLayout);
 
-    QVBoxLayout *errorLayout = new QVBoxLayout();
-    errorLayout->setAlignment(Qt::AlignCenter);
-    QLabel *errorLabel = new QLabel("Failed to load albums.");
-    errorLabel->setStyleSheet("font-weight: bold; color: red;");
-    errorLayout->addWidget(errorLabel);
-    m_retryButton = new QPushButton("Retry", this);
-    errorLayout->addWidget(m_retryButton, 0, Qt::AlignCenter);
-    m_loadingWidget->setupErrorWidget(errorLayout);
-    connect(m_retryButton, &QPushButton::clicked, this, [this]() {
-        m_loadingWidget->showLoading();
-        QTimer::singleShot(100, this, &GalleryWidget::reload);
-    });
+    connect(m_loadingWidget, &ZLoadingWidget::retryClicked, this,
+            &GalleryWidget::refresh);
 
     setControlsEnabled(false); // Disable controls until album is selected
+}
+
+void GalleryWidget::refresh()
+{
+    bool inAlbumSelection =
+        (m_loadingWidget->currentWidget() == m_albumSelectionWidget);
+
+    m_loadingWidget->showLoading();
+    // refresh the album list
+    if (inAlbumSelection) {
+        qDebug() << "Refreshing album list...";
+        QTimer::singleShot(100, this, &GalleryWidget::reload);
+        return;
+    }
+    if (m_model) {
+        qDebug() << "Refreshing current album:" << m_currentAlbumPath;
+        m_model->setAlbumPath(m_currentAlbumPath);
+    }
 }
 
 void GalleryWidget::reload()
@@ -144,7 +152,7 @@ void GalleryWidget::setupControlsLayout()
                               static_cast<int>(PhotoModel::VideosOnly));
     m_filterComboBox->setCurrentIndex(
         static_cast<int>(PhotoModel::All)); // Default to All
-    m_filterComboBox->setMinimumWidth(100); // Ensure text fits
+    m_filterComboBox->setMinimumWidth(90);  // Ensure text fits
     m_filterComboBox->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
 
     // Export buttons
@@ -161,6 +169,13 @@ void GalleryWidget::setupControlsLayout()
         "Back to Albums");
     m_backButton->setMaximumWidth(30);
     m_backButton->hide(); // Hidden initially
+
+    // Refresh button
+    m_refreshButton = new ZIconWidget(
+        QIcon(":/resources/icons/IcOutlineRefresh.png"), "Refresh Album");
+    m_refreshButton->setMaximumWidth(30);
+    connect(m_refreshButton, &ZIconWidget::clicked, this,
+            &GalleryWidget::refresh);
 
     // Connect signals
     connect(m_sortComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
@@ -180,6 +195,7 @@ void GalleryWidget::setupControlsLayout()
 
     // Add widgets to layout
     m_controlsLayout->addWidget(m_backButton);
+    m_controlsLayout->addWidget(m_refreshButton);
     m_controlsLayout->addWidget(m_importButton);
     m_controlsLayout->addWidget(sortLabel);
     m_controlsLayout->addWidget(m_sortComboBox);
@@ -296,13 +312,19 @@ void GalleryWidget::onExportAll()
     // if we are exporting from album selection view
     if (m_loadingWidget->currentWidget() == m_albumSelectionWidget) {
 
-        // gel all available albums
+        // get all available albums
         QStringList paths;
         for (int row = 0; row < m_albumListView->model()->rowCount(); ++row) {
             QModelIndex index = m_albumListView->model()->index(row, 0);
             if (index.isValid()) {
                 paths.append(index.data(Qt::UserRole).toString());
             }
+        }
+
+        if (paths.isEmpty()) {
+            QMessageBox::information(this, "No Albums",
+                                     "No albums available for export.");
+            return;
         }
 
         auto *exportAlbum = new ExportAlbum(m_device, paths, this);
@@ -319,7 +341,6 @@ void GalleryWidget::onExportAll()
         QMessageBox::information(this, "No Items", "No items to export.");
         return;
     }
-
     QString message =
         QString("Export all %1 items currently shown?").arg(filePaths.size());
     int reply = QMessageBox::question(this, "Export All", message,
@@ -463,6 +484,8 @@ void GalleryWidget::setupPhotoGalleryView()
 
     connect(m_listView, &QListView::customContextMenuRequested, this,
             &GalleryWidget::onPhotoContextMenu);
+
+    m_albumModel = new QStandardItemModel(this);
 }
 
 void GalleryWidget::onError()
@@ -475,12 +498,13 @@ void GalleryWidget::onError()
 
 void GalleryWidget::onAlbumListLoaded(const QList<QString> &dcimTree)
 {
+    qDebug() << "Albums loaded:" << dcimTree.size();
     if (dcimTree.isEmpty()) {
-        qDebug() << "DCIM seems to be empty or inaccessible";
+        m_loadingWidget->showError("No albums found on device");
         return;
     }
 
-    m_albumModel = new QStandardItemModel(this);
+    m_albumModel->clear();
 
     for (const QString &albumName : dcimTree) {
         auto *item = new QStandardItem(albumName);
@@ -518,14 +542,17 @@ void GalleryWidget::onAlbumSelected(const QString &albumPath)
 
         connect(m_model, &PhotoModel::albumPathSet, this, [this]() {
             // Switch to photo gallery view once album is loaded
+            m_loadingWidget->stop(false);
             m_loadingWidget->switchToWidget(m_photoGalleryWidget);
             // Enable controls and show back button
             setControlsEnabled(true);
             m_backButton->show();
         });
 
-        connect(m_model, &PhotoModel::timedOut, this, [this]() {
-            m_loadingWidget->showError("Timed out loading album");
+        connect(m_model, &PhotoModel::albumPathSetFailed, this, [this]() {
+            m_loadingWidget->stop(false);
+            m_backButton->show();
+            m_loadingWidget->showError("Failed to load album");
         });
 
         // Update export button states based on selection

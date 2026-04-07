@@ -63,6 +63,7 @@ private slots:
 
 private:
     void reload();
+    void refresh();
     void setupControlsLayout();
     void setupAlbumSelectionView();
     void setupPhotoGalleryView();
@@ -84,8 +85,8 @@ private:
     QVBoxLayout *m_mainLayout;
     QHBoxLayout *m_controlsLayout;
     ZLoadingWidget *m_loadingWidget;
-    QPushButton *m_retryButton;
     QPushButton *m_importButton;
+
     // Album selection view
     QWidget *m_albumSelectionWidget = nullptr;
     QListView *m_albumListView = nullptr;
@@ -102,6 +103,7 @@ private:
     QPushButton *m_exportSelectedButton;
     QPushButton *m_exportAllButton;
     ZIconWidget *m_backButton = nullptr;
+    ZIconWidget *m_refreshButton = nullptr;
 
     // Export manager
     ExportManager *m_exportManager;

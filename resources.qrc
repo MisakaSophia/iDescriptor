@@ -42,6 +42,7 @@
         <file>resources/icons/MaterialSymbolsCloseRounded.png</file>
         <file>resources/icons/MaterialSymbolsLightKeyboardArrowUp.png</file>
         <file>resources/icons/MaterialSymbolsLightKeyboardArrowDown.png</file>
+        <file>resources/icons/IcOutlineRefresh.png</file>
         <file>qml/MapView.qml</file>
         <file>resources/iphone.png</file>
         <file>resources/ios-version.png</file>
