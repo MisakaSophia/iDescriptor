@@ -45,13 +45,21 @@ int main(int argc, char *argv[])
                                  "their default values.");
     }
 #ifdef WIN32
-    QFile styleFile(detectDarkModeWindows() ? ":/resources/win.dark.qcss"
-                                            : ":/resources/win.light.qcss");
-    if (styleFile.open(QFile::ReadOnly | QFile::Text)) {
-        const QString style = QString::fromUtf8(styleFile.readAll())
-                                  .arg(COLOR_ACCENT_BLUE.name());
-        qDebug() << "Loaded Windows style sheet successfully.";
-        a.setStyleSheet(style);
+    QApplication::setEffectEnabled(Qt::UI_AnimateCombo, false);
+
+    QOperatingSystemVersion osVersion = QOperatingSystemVersion::current();
+    if (osVersion >= QOperatingSystemVersion::Windows11) {
+        QFile styleFile(detectDarkModeWindows() ? ":/resources/win.dark.qcss"
+                                                : ":/resources/win.light.qcss");
+        if (styleFile.open(QFile::ReadOnly | QFile::Text)) {
+            const QString style = QString::fromUtf8(styleFile.readAll())
+                                      .arg(COLOR_ACCENT_BLUE.name());
+            qDebug() << "Loaded Windows style sheet successfully.";
+            a.setStyleSheet(style);
+        }
+    } else {
+        qDebug() << "Windows version is older than 11, not applying winui "
+                    "stylesheet.";
     }
 
     QString appPath = QCoreApplication::applicationDirPath();

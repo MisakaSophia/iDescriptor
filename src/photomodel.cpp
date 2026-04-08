@@ -183,6 +183,7 @@ bool PhotoModel::populatePhotoPaths()
             info.fileName = fileName;
             info.thumbnailRequested = false;
             info.dateTime = creationDateVariant.toDateTime();
+            info.fileType = determineFileType(fileName);
             m_allPhotos.append(info);
         }
     }
@@ -279,14 +280,6 @@ QString PhotoModel::getFilePath(const QModelIndex &index) const
         return m_photos.at(index.row()).filePath;
     }
     return QString();
-}
-
-PhotoInfo::FileType PhotoModel::getFileType(const QModelIndex &index) const
-{
-    if (index.isValid() && index.row() < m_photos.size()) {
-        return m_photos.at(index.row()).fileType;
-    }
-    return PhotoInfo::Image;
 }
 
 QStringList PhotoModel::getAllFilePaths() const

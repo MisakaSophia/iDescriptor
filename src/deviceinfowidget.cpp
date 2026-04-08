@@ -131,16 +131,6 @@ DeviceInfoWidget::DeviceInfoWidget(
     m_chargingStatusLabel =
         new QLabel(device->deviceInfo.batteryInfo.isCharging ? "Charging"
                                                              : "Not Charging");
-    m_chargingStatusLabel->setObjectName("ChargingStatusLabel");
-    m_chargingStatusLabel->setStyleSheet(mergeStyles(
-        m_chargingStatusLabel,
-        (device->deviceInfo.batteryInfo.isCharging
-             ? QString(
-                   "QLabel#ChargingStatusLabel { color: %1; font-size: 14px; }")
-                   .arg(COLOR_GREEN.name())
-             : QString(
-                   "QLabel#ChargingStatusLabel { color: %1; font-size: 14px; }")
-                   .arg(qApp->palette().color(QPalette::WindowText).name()))));
     // Create the layout without a parent widget
     QHBoxLayout *chargingLayout = new QHBoxLayout();
     chargingLayout->setContentsMargins(0, 0, 0, 0);
@@ -150,6 +140,7 @@ DeviceInfoWidget::DeviceInfoWidget(
     m_lightningIconLabel =
         new ZIconLabel(QIcon(":/resources/icons/MdiLightningBolt.png"),
                        " Charging", 1.0, this);
+    updateChargingStatusIcon();
 
     m_batteryWidget = new BatteryWidget(
         qBound<int>(1, device->deviceInfo.batteryInfo.currentBatteryLevel, 100),
@@ -399,14 +390,13 @@ void DeviceInfoWidget::updateChargingStatusIcon()
 {
     if (m_device->deviceInfo.batteryInfo.isCharging) {
         m_chargingStatusLabel->setText("Charging");
-        // FIXME
-        //  m_chargingStatusLabel->setStyleSheet(
-        //      QString("color: %1;").arg(COLOR_GREEN.name()));
+        m_chargingStatusLabel->setStyleSheet(
+            QString("color: %1;").arg(COLOR_GREEN.name()));
         m_lightningIconLabel->show();
 
     } else {
         m_chargingStatusLabel->setText("Not Charging");
-        // m_chargingStatusLabel->setStyleSheet("");
+        m_chargingStatusLabel->setStyleSheet("");
         m_lightningIconLabel->hide();
     }
 }

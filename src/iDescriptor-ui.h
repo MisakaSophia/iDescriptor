@@ -743,3 +743,26 @@ private:
     QPushButton *m_dirButton;
     QString m_outputDir;
 };
+
+inline void setLabelTextColor(QLabel *label, const QColor &color)
+{
+    if (!label) {
+        return;
+    }
+    QPalette pal = label->palette();
+    pal.setColor(QPalette::WindowText, color);
+    label->setPalette(pal);
+}
+
+inline void resetLabelTextColor(QLabel *label)
+{
+    if (!label) {
+        return;
+    }
+    QWidget *parent = label->parentWidget();
+    QPalette pal = label->palette();
+    const QPalette basePal =
+        parent ? parent->palette() : QApplication::palette();
+    pal.setColor(QPalette::WindowText, basePal.color(QPalette::WindowText));
+    label->setPalette(pal);
+}

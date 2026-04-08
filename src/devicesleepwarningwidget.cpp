@@ -7,8 +7,9 @@ DeviceSleepWarningWidget::DeviceSleepWarningWidget(QWidget *parent)
     setupWinWindow(this);
 #endif
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(0, 20, 0, 0);
+    mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(0);
+    setMinimumWidth(400);
 
     m_loadingWidget = new ZLoadingWidget(false, this);
     mainLayout->addWidget(m_loadingWidget);
@@ -21,7 +22,7 @@ DeviceSleepWarningWidget::DeviceSleepWarningWidget(QWidget *parent)
 
     m_mediaPlayer = new QMediaPlayer(this);
     m_videoWidget = new QVideoWidget(this);
-    m_videoWidget->setMinimumSize(300, 500);
+    m_videoWidget->setMinimumSize(300, 400);
     m_videoWidget->setSizePolicy(QSizePolicy::Expanding,
                                  QSizePolicy::Expanding);
     m_videoWidget->setAspectRatioMode(Qt::KeepAspectRatio);
@@ -56,7 +57,7 @@ DeviceSleepWarningWidget::DeviceSleepWarningWidget(QWidget *parent)
     contentLayout->addLayout(textLayout);
     contentLayout->addWidget(m_videoWidget);
 
-    contentLayout->addSpacing(20);
+    contentLayout->addSpacing(10);
 
     QCheckBox *dontShowAgain = new QCheckBox("Don't show this again", this);
     connect(dontShowAgain, &QCheckBox::toggled, this, [this](bool checked) {
@@ -65,6 +66,7 @@ DeviceSleepWarningWidget::DeviceSleepWarningWidget(QWidget *parent)
     });
 
     contentLayout->addWidget(dontShowAgain, 0, Qt::AlignCenter);
+    contentLayout->addSpacing(10);
     m_mediaPlayer->setSource(QUrl("qrc:/resources/unlock.mp4"));
     QTimer::singleShot(500, this, &DeviceSleepWarningWidget::init);
 }

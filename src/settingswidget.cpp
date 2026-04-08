@@ -520,8 +520,8 @@ void SettingsWidget::saveSettings()
     if (m_backDropTypeCombo) {
         const QVariant data = m_backDropTypeCombo->currentData();
         if (!data.isValid()) {
-            // Mica
-            sm->setWinBackdropType(static_cast<WIN_BACKDROP>(2));
+            // AUTO = ACRYLIC
+            sm->setWinBackdropType(static_cast<WIN_BACKDROP>(ACRYLIC));
         } else {
             sm->setWinBackdropType(static_cast<WIN_BACKDROP>(data.toInt()));
         }

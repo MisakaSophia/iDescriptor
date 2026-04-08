@@ -75,7 +75,6 @@ public:
     // Export functionality
     QStringList getSelectedFilePaths(const QModelIndexList &indexes) const;
     QString getFilePath(const QModelIndex &index) const;
-    PhotoInfo::FileType getFileType(const QModelIndex &index) const;
 
     // Get all items for export
     QStringList getAllFilePaths() const;

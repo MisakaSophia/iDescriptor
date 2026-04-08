@@ -26,10 +26,7 @@
 #include "../platform/macos/macos.h"
 #endif
 
-#ifdef WIN32
-#include "../platform/windows/widgets/wintoolwidget.h"
-#endif
-//FIXME: implement close logic
+// TODO: implement auto close logic when device is disconnected
 class Tool : public QWidget
 {
 public:

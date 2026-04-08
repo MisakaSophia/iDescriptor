@@ -19,7 +19,6 @@
 
 #include "tool.h"
 #ifdef WIN32
-#include "../platform/windows/widgets/wintoolwidget.h"
 #include "../platform/windows/win_common.h"
 #endif
 

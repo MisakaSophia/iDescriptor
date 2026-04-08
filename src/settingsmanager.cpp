@@ -266,6 +266,10 @@ void SettingsManager::resetToDefaults()
     setShowV4L2(false);
 #endif
     setIsSleepyDeviceWarningDismissed(false);
+
+#ifdef WIN32
+    setWinBackdropType(ACRYLIC);
+#endif
 }
 
 void SettingsManager::saveFavoritePlace(const QString &path,
@@ -501,7 +505,8 @@ void SettingsManager::setWinBackdropType(WIN_BACKDROP type)
 WIN_BACKDROP SettingsManager::winBackdropType() const
 {
     return static_cast<WIN_BACKDROP>(
-        m_settings->value("winBackdropType", static_cast<int>(MICA)).toInt());
+        m_settings->value("winBackdropType", static_cast<int>(ACRYLIC))
+            .toInt());
 }
 #endif
 

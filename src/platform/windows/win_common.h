@@ -99,16 +99,19 @@ inline bool detectDarkModeWindows()
 
 inline void setupWinWindow(QWidget *window)
 {
+    QOperatingSystemVersion osVersion = QOperatingSystemVersion::current();
+    if (osVersion < QOperatingSystemVersion::Windows11)
+        return;
     window->setAttribute(Qt::WA_TranslucentBackground);
     HWND hwnd = reinterpret_cast<HWND>(window->winId());
+    enableMica(hwnd);
 
-    // use mica on Windows 11
-    QOperatingSystemVersion osVersion = QOperatingSystemVersion::current();
-    if (osVersion >= QOperatingSystemVersion::Windows11) {
-        enableMica(hwnd);
-    } else {
-        enableAcrylic(hwnd);
-    }
+    /*
+        normally we had plans to enable acrylic on win 10 but since it's
+       untested and may cause issues, we'll just enable mica on win 11 and above
+       for now
+    */
+    // enableAcrylic(hwnd);
 }
 
 enum CornerPreference : int {
@@ -117,6 +120,8 @@ enum CornerPreference : int {
     Corner_Round = DWMWCP_ROUND,
     Corner_RoundSmall = DWMWCP_ROUNDSMALL
 };
+/* apparently this only works on Win 11 but should not crash on older versions
+ */
 inline void SetCorner(HWND hwnd, CornerPreference corner)
 {
     if (corner != Corner_Default) {
