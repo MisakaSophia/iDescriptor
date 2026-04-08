@@ -184,13 +184,18 @@ void DeviceSidebarItem::setSelected(bool selected)
 
 #ifndef WIN32
     if (selected) {
-        setStyleSheet(
-            "QFrame#DeviceSidebarItem {     background-color: rgba(255, "
-            "255, 255, 45); border-radius: 5px; }");
+        setStyleSheet(QString("QFrame#DeviceSidebarItem { "
+                              "background-color: rgba(255, 255, 255, 45); "
+                              "border-radius: 5px; "
+                              "border: 2px solid %1; "
+                              "}")
+                          .arg(COLOR_ACCENT_BLUE.name()));
     } else {
-        setStyleSheet(
-            "QFrame#DeviceSidebarItem {     background-color: rgba(255, "
-            "255, 255, 16); border-radius: 5px; }");
+        setStyleSheet("QFrame#DeviceSidebarItem { "
+                      "background-color: rgba(255, 255, 255, 16); "
+                      "border-radius: 5px; "
+                      "border: 2px solid transparent; "
+                      "}");
     }
 #else
     if (selected) {
@@ -264,7 +269,9 @@ RecoveryDeviceSidebarItem::RecoveryDeviceSidebarItem(uint64_t ecid,
                                                      QWidget *parent)
     : QFrame(parent), m_ecid(ecid)
 {
+    setObjectName("RecoveryDeviceSidebarItem");
     setupUI();
+    setSelected(false);
 }
 
 void RecoveryDeviceSidebarItem::setupUI()
@@ -299,25 +306,51 @@ void RecoveryDeviceSidebarItem::setupUI()
     //             });
     //             menu.exec(mapToGlobal(pos));
     //         });
-
-    setStyleSheet("RecoveryDeviceSidebarItem { border: "
-                  "1px solid #e0e0e0; border-radius: 5px; }");
 }
 
 void RecoveryDeviceSidebarItem::setSelected(bool selected)
 {
-    if (m_selected == selected)
-        return;
-
     m_selected = selected;
+    bool dark = isDarkMode();
 
+#ifndef WIN32
     if (selected) {
-        setStyleSheet("RecoveryDeviceSidebarItem { border: "
-                      "2px solid #2196f3; border-radius: 5px; }");
+        setStyleSheet(QString("QFrame#RecoveryDeviceSidebarItem { "
+                              "background-color: rgba(255, 255, 255, 45); "
+                              "border-radius: 5px; "
+                              "border: 2px solid %1; "
+                              "}")
+                          .arg(COLOR_ACCENT_BLUE.name()));
     } else {
-        setStyleSheet("RecoveryDeviceSidebarItem { border: "
-                      "1px solid #e0e0e0; border-radius: 5px; }");
+        setStyleSheet("QFrame#RecoveryDeviceSidebarItem { "
+                      "background-color: rgba(255, 255, 255, 16); "
+                      "border-radius: 5px; "
+                      "border: 2px solid transparent; "
+                      "}");
     }
+#else
+    if (selected) {
+        if (!dark) {
+            setStyleSheet(
+                "QFrame#RecoveryDeviceSidebarItem {     background-color: "
+                "rgba(0, 0, 0, 30); }");
+        } else {
+            setStyleSheet("QFrame#RecoveryDeviceSidebarItem {     "
+                          "background-color: rgba(255, "
+                          "255, 255, 45); }");
+        }
+    } else {
+        if (!dark) {
+            setStyleSheet(
+                "QFrame#RecoveryDeviceSidebarItem {     background-color: "
+                "rgba(0, 0, 0, 10); }");
+        } else {
+            setStyleSheet("QFrame#RecoveryDeviceSidebarItem {     "
+                          "background-color: rgba(255, "
+                          "255, 255, 16); }");
+        }
+    }
+#endif
 }
 
 // DeviceSidebarWidget Implementation
@@ -489,21 +522,53 @@ DevicePendingSidebarItem::DevicePendingSidebarItem(const QString &udid,
     layout->addWidget(spinner);
 
     setLayout(layout);
+    setObjectName("DevicePendingSidebarItem");
     setSelected(false);
 }
 
 void DevicePendingSidebarItem::setSelected(bool selected)
 {
     m_selected = selected;
+    bool dark = isDarkMode();
 
+#ifndef WIN32
     if (selected) {
-        setStyleSheet(QString("DevicePendingSidebarItem { border: "
-                              "2px solid %1; border-radius: 5px; }")
-                          .arg(COLOR_BLUE.name()));
+        setStyleSheet(QString("QFrame#DevicePendingSidebarItem { "
+                              "background-color: rgba(255, 255, 255, 45); "
+                              "border-radius: 5px; "
+                              "border: 2px solid %1; "
+                              "}")
+                          .arg(COLOR_ACCENT_BLUE.name()));
     } else {
-        setStyleSheet("DevicePendingSidebarItem { border: "
-                      "1px solid #e0e0e0; border-radius: 5px; }");
+        setStyleSheet("QFrame#DevicePendingSidebarItem { "
+                      "background-color: rgba(255, 255, 255, 16); "
+                      "border-radius: 5px; "
+                      "border: 2px solid transparent; "
+                      "}");
     }
+#else
+    if (selected) {
+        if (!dark) {
+            setStyleSheet(
+                "QFrame#DevicePendingSidebarItem {     background-color: "
+                "rgba(0, 0, 0, 30); }");
+        } else {
+            setStyleSheet("QFrame#DevicePendingSidebarItem {     "
+                          "background-color: rgba(255, "
+                          "255, 255, 45); }");
+        }
+    } else {
+        if (!dark) {
+            setStyleSheet(
+                "QFrame#DevicePendingSidebarItem {     background-color: "
+                "rgba(0, 0, 0, 10); }");
+        } else {
+            setStyleSheet("QFrame#DevicePendingSidebarItem {     "
+                          "background-color: rgba(255, "
+                          "255, 255, 16); }");
+        }
+    }
+#endif
 }
 
 void DevicePendingSidebarItem::mousePressEvent(QMouseEvent *event)
