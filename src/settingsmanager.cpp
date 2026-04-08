@@ -265,6 +265,7 @@ void SettingsManager::resetToDefaults()
 #ifdef __linux__
     setShowV4L2(false);
 #endif
+    setIsSleepyDeviceWarningDismissed(false);
 }
 
 void SettingsManager::saveFavoritePlace(const QString &path,
@@ -503,3 +504,20 @@ WIN_BACKDROP SettingsManager::winBackdropType() const
         m_settings->value("winBackdropType", static_cast<int>(MICA)).toInt());
 }
 #endif
+
+bool SettingsManager::isSleepyDeviceWarningDismissed() const
+{
+    return m_settings->value("sleepyDeviceWarningDismissed", false).toBool();
+}
+
+void SettingsManager::dismissSleepyDeviceWarning()
+{
+    m_settings->setValue("sleepyDeviceWarningDismissed", true);
+    m_settings->sync();
+}
+
+void SettingsManager::setIsSleepyDeviceWarningDismissed(bool dismissed)
+{
+    m_settings->setValue("sleepyDeviceWarningDismissed", dismissed);
+    m_settings->sync();
+}

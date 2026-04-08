@@ -181,6 +181,12 @@ void AppContext::removeDevice(iDescriptor::Uniq uniq, bool ask_backend)
     auto device = m_devices[q_udid];
     m_devices.remove(q_udid);
 
+    qDebug() << "Removed device with UUID " + q_udid << "macAddress:"
+             << QString::fromStdString(device->deviceInfo.wifiMacAddress)
+             << "ipAddress:"
+             << QString::fromStdString(device->deviceInfo.ipAddress)
+             << "wasWireless:" << device->deviceInfo.isWireless;
+
     emit deviceRemoved(q_udid, device->deviceInfo.wifiMacAddress,
                        device->deviceInfo.ipAddress,
                        device->deviceInfo.isWireless);
@@ -350,13 +356,17 @@ void AppContext::heartbeatFailed(const QString &macAddress, int tries)
     emit deviceHeartbeatFailed(macAddress, tries);
 }
 
-void AppContext::tryToConnectToNetworkDevice(const NetworkDevice &device)
+void AppContext::tryToConnectToNetworkDevice(const NetworkDevice &device,
+                                             bool forceCache,
+                                             bool setSelectionIfExists)
 {
     qDebug() << "Trying to connect to network device with MAC:"
              << device.macAddress << "IP:" << device.address;
 
     // force refresh macAddress-pairing file mapping
-    cachePairedDevices();
+    if (forceCache) {
+        cachePairedDevices();
+    }
 
     const iDescriptorDevice *existingDevice = nullptr;
     existingDevice = getDeviceByMacAddress(device.macAddress);
@@ -365,8 +375,10 @@ void AppContext::tryToConnectToNetworkDevice(const NetworkDevice &device)
         emit deviceAlreadyExistsMAC(
             iDescriptor::Uniq(existingDevice->deviceInfo.wifiMacAddress, true));
         // TODO: add a setting for this
-
-        setCurrentDeviceSelection(DeviceSelection(existingDevice->udid), true);
+        if (setSelectionIfExists) {
+            setCurrentDeviceSelection(DeviceSelection(existingDevice->udid),
+                                      true);
+        }
         return;
     }
 

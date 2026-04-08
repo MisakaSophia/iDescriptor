@@ -26,23 +26,13 @@
 #include "releasechangelogdialog.h"
 #include "toolboxwidget.h"
 #include "welcomewidget.h"
-#include <QHBoxLayout>
-#include <QStack>
-#include <QStackedWidget>
-#include <QTimer>
-#include <QVBoxLayout>
-#include <QWidget>
 #include <unistd.h>
 
 #include "appcontext.h"
 #include "networkdeviceswidget.h"
 #include "settingsmanager.h"
 #include "statusballoon.h"
-#include <QApplication>
-#include <QDesktopServices>
-#include <QMenu>
-#include <QMenuBar>
-#include <QMessageBox>
+
 #ifdef WIN32
 #include "platform/windows/win_common.h"
 #endif
@@ -129,10 +119,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     auto mainLayout = new QVBoxLayout(centralWidget);
     mainLayout->setContentsMargins(0, 0, 0, 0);
 
-    connect(AppContext::sharedInstance()->core, &CXX::Core::device_event, this,
+    auto core = AppContext::sharedInstance()->core;
+
+    connect(core, &CXX::Core::device_event, this,
             [this](uint32_t code, const QString &udid, const QString &info) {
                 handleCallback(code, udid, info);
             });
+
+    connect(core, &CXX::Core::sleepy_time_detected, this,
+            &MainWindow::handleShowSleepyDeviceWarning);
 
     AppContext::sharedInstance()->core->init();
 
@@ -491,4 +486,27 @@ MainWindow::~MainWindow()
 #endif
     delete m_updater;
     // sleep(2);
+}
+
+void MainWindow::handleShowSleepyDeviceWarning()
+{
+
+    /* one minute cooldown to prevent spamming */
+    static const int kMinIntervalMs = 60 * 1000;
+
+    static QDateTime lastShown;
+    const auto now = QDateTime::currentDateTimeUtc();
+
+    if (lastShown.isValid() && lastShown.msecsTo(now) < kMinIntervalMs) {
+        qDebug() << "Ignoring sleepy device warning dialog.";
+        return;
+    }
+
+    lastShown = now;
+
+    if (SettingsManager::sharedInstance()->isSleepyDeviceWarningDismissed()) {
+        return;
+    }
+
+    DeviceSleepWarningWidget(this).exec();
 }

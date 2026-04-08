@@ -75,7 +75,7 @@ mod qobject {
         );
 
         #[qsignal]
-        fn dev_image_mounted(self: Pin<&mut ServiceManager>, success: bool,is_locked: bool);
+        fn dev_image_mounted(self: Pin<&mut ServiceManager>, success: bool, is_locked: bool);
 
         #[qsignal]
         fn developer_mode_option_revealed(self: Pin<&mut ServiceManager>, success: bool);
@@ -130,7 +130,6 @@ mod qobject {
 
         #[qsignal]
         fn install_ipa_progress(self: Pin<&mut ServiceManager>, progress: f64, state: QString);
-
 
         #[qinvokable]
         fn enable_wifi_connections(&self);
@@ -908,11 +907,7 @@ impl qobject::ServiceManager {
         let udid = self.get_udid().to_string();
 
         run_sync(async move {
-            let maybe_device = APP_DEVICE_STATE
-                .lock()
-                .await
-                .get(udid.as_str())
-                .cloned();
+            let maybe_device = APP_DEVICE_STATE.lock().await.get(udid.as_str()).cloned();
 
             let device = match maybe_device {
                 Some(d) => d,
@@ -924,7 +919,7 @@ impl qobject::ServiceManager {
 
             if let Err(e) = device.diag.lock().await.restart().await {
                 eprintln!("restart: Failed to restart device {udid}: {e}");
-                return false
+                return false;
             }
             return true;
         })
@@ -934,11 +929,7 @@ impl qobject::ServiceManager {
         let udid = self.get_udid().to_string();
 
         run_sync(async move {
-            let maybe_device = APP_DEVICE_STATE
-                .lock()
-                .await
-                .get(udid.as_str())
-                .cloned();
+            let maybe_device = APP_DEVICE_STATE.lock().await.get(udid.as_str()).cloned();
 
             let device = match maybe_device {
                 Some(d) => d,
@@ -950,7 +941,7 @@ impl qobject::ServiceManager {
 
             if let Err(e) = device.diag.lock().await.shutdown().await {
                 eprintln!("shutdown: Failed to shutdown device {udid}: {e}");
-                return false
+                return false;
             }
             return true;
         })
@@ -959,11 +950,7 @@ impl qobject::ServiceManager {
         let udid = self.get_udid().to_string();
 
         run_sync(async move {
-            let maybe_device = APP_DEVICE_STATE
-                .lock()
-                .await
-                .get(udid.as_str())
-                .cloned();
+            let maybe_device = APP_DEVICE_STATE.lock().await.get(udid.as_str()).cloned();
 
             let device = match maybe_device {
                 Some(d) => d,
@@ -974,8 +961,10 @@ impl qobject::ServiceManager {
             };
 
             if let Err(e) = device.lockdown.lock().await.enter_recovery().await {
-                eprintln!("enter_recovery_mode: Failed to enter recovery mode for device {udid}: {e}");
-                return false
+                eprintln!(
+                    "enter_recovery_mode: Failed to enter recovery mode for device {udid}: {e}"
+                );
+                return false;
             }
             return true;
         })
@@ -985,8 +974,15 @@ impl qobject::ServiceManager {
         let udid = self.get_udid().to_string();
         let qt_t = self.qt_thread();
         let local_ipa_path_owned = local_ipa_path.clone().to_string();
-        // FIXME: this is a bit hacky 
-        let ipa_path_on_device = format!("/PublicStaging/{}", local_ipa_path.to_string().split('/').last().unwrap_or("app.ipa"));
+        // FIXME: this is a bit hacky
+        let ipa_path_on_device = format!(
+            "/PublicStaging/{}",
+            local_ipa_path
+                .to_string()
+                .split('/')
+                .last()
+                .unwrap_or("app.ipa")
+        );
         RUNTIME.spawn(async move {
             let qt_thread = qt_t.clone();
             
@@ -1145,24 +1141,21 @@ impl qobject::ServiceManager {
         let qt_t = self.qt_thread();
         let udid = self.get_udid().to_string();
 
-
         RUNTIME.spawn(async move {
             let qt_thread = qt_t.clone();
-            
+
             let lc_arc = {
-                let maybe_device = APP_DEVICE_STATE
-                    .lock()
-                    .await
-                    .get(udid.as_str())
-                    .cloned();
+                let maybe_device = APP_DEVICE_STATE.lock().await.get(udid.as_str()).cloned();
 
                 let device = match maybe_device {
                     Some(d) => d,
                     None => {
                         eprintln!("enable_wifi_connections: device {udid} not found");
-                        let _ = qt_thread.queue(|t| {
-                            t.enable_wifi_connections_result(false);
-                        }).ok();
+                        let _ = qt_thread
+                            .queue(|t| {
+                                t.enable_wifi_connections_result(false);
+                            })
+                            .ok();
                         return;
                     }
                 };
@@ -1173,22 +1166,31 @@ impl qobject::ServiceManager {
             let mut lc = lc_arc.lock().await;
 
             let value = Value::Boolean(true);
-            match lc.set_value("EnableWifiConnections", value, Some("com.apple.mobile.wireless_lockdown")).await {
+            match lc
+                .set_value(
+                    "EnableWifiConnections",
+                    value,
+                    Some("com.apple.mobile.wireless_lockdown"),
+                )
+                .await
+            {
                 Ok(_) => {
-                    let _ = qt_thread.queue(|t| {
-                        t.enable_wifi_connections_result(true);
-                    }).ok();
-                },
+                    let _ = qt_thread
+                        .queue(|t| {
+                            t.enable_wifi_connections_result(true);
+                        })
+                        .ok();
+                }
                 Err(e) => {
                     eprintln!("wireless: LockdownClient::set_value failed: {e:?}");
-                    let _ = qt_thread.queue(|t| {
-                        t.enable_wifi_connections_result(false);
-                    }).ok();
+                    let _ = qt_thread
+                        .queue(|t| {
+                            t.enable_wifi_connections_result(false);
+                        })
+                        .ok();
                 }
             }
-
         });
-
     }
 }
 
@@ -1202,21 +1204,21 @@ async fn set_device_location_lockdown(
 }
 
 // iOS 17+:
-async fn set_device_location_rsd(  
-    proxy: CoreDeviceProxy,  
-    latitude: f64,  
-    longitude: f64,  
-) -> Result<(), idevice::IdeviceError> {  
+async fn set_device_location_rsd(
+    proxy: CoreDeviceProxy,
+    latitude: f64,
+    longitude: f64,
+) -> Result<(), idevice::IdeviceError> {
     let rsd_port = proxy.tunnel_info().server_rsd_port;
-    let adapter = proxy.create_software_tunnel()?;  
-    let mut adapter = adapter.to_async_handle();  
-    let stream = adapter.connect(rsd_port).await?;  
-  
-    let mut handshake = RsdHandshake::new(stream).await?;  
-  
-    let mut remote_server = RemoteServerClient::connect_rsd(&mut adapter, &mut handshake).await?;  
-    remote_server.read_message(0).await?;  
-  
-    let mut location_client = LocationSimulationClient::new(&mut remote_server).await?;  
-    location_client.set(latitude, longitude).await  
+    let adapter = proxy.create_software_tunnel()?;
+    let mut adapter = adapter.to_async_handle();
+    let stream = adapter.connect(rsd_port).await?;
+
+    let mut handshake = RsdHandshake::new(stream).await?;
+
+    let mut remote_server = RemoteServerClient::connect_rsd(&mut adapter, &mut handshake).await?;
+    remote_server.read_message(0).await?;
+
+    let mut location_client = LocationSimulationClient::new(&mut remote_server).await?;
+    location_client.set(latitude, longitude).await
 }

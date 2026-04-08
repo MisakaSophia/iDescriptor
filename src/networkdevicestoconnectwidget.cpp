@@ -30,7 +30,7 @@
 
 NetworkDeviceCard::NetworkDeviceCard(const NetworkDevice &device,
                                      QWidget *parent)
-    : QWidget(parent)
+    : QWidget(parent), m_device(device)
 {
     QVBoxLayout *cardLayout = new QVBoxLayout(this);
     cardLayout->setContentsMargins(12, 10, 12, 10);
@@ -182,6 +182,12 @@ NetworkDevicesToConnectWidget::NetworkDevicesToConnectWidget(QWidget *parent)
             &NetworkDevicesToConnectWidget::onDeviceAdded);
     connect(AppContext::sharedInstance(), &AppContext::deviceAlreadyExistsMAC,
             this, &NetworkDevicesToConnectWidget::onDeviceAlreadyExists);
+
+    // eval interval
+    QTimer *evalTimer = new QTimer(this);
+    connect(evalTimer, &QTimer::timeout, this,
+            &NetworkDevicesToConnectWidget::eval);
+    evalTimer->start(30000); // evaluate every 30 seconds
 }
 
 NetworkDevicesToConnectWidget::~NetworkDevicesToConnectWidget() {}
@@ -310,6 +316,21 @@ void NetworkDevicesToConnectWidget::onWirelessDeviceRemoved(
     } else {
         m_statusLabel->setText(
             QString("Found %1 network device(s)").arg(deviceCount));
+    }
+}
+
+void NetworkDevicesToConnectWidget::eval()
+{
+    if (QCoreApplication::closingDown())
+        return;
+    bool forceCache = true;
+    for (const auto &card : m_deviceCards) {
+        if (card) {
+            NetworkDevice device = card->getDevice();
+            AppContext::sharedInstance()->tryToConnectToNetworkDevice(
+                device, forceCache, false);
+            forceCache = false; // force cache once
+        }
     }
 }
 

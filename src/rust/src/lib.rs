@@ -1,13 +1,12 @@
 use futures::StreamExt;
 use idevice::{
-    IdeviceService,
+    IdeviceError, IdeviceService,
     afc::AfcClient,
     diagnostics_relay::DiagnosticsRelayClient,
     heartbeat,
     lockdown::LockdownClient,
     pairing_file::PairingFile,
-    provider::{TcpProvider},
-    IdeviceError,
+    provider::TcpProvider,
     usbmuxd::{Connection, UsbmuxdAddr, UsbmuxdConnection, UsbmuxdListenEvent},
 };
 use std::{any::type_name, sync::Arc};
@@ -29,8 +28,8 @@ use crate::qobject::Core;
 use once_cell::sync::Lazy;
 use plist::Value;
 mod afc;
-mod afc_services;
 mod afc2_services;
+mod afc_services;
 mod hause_arrest;
 mod io_manager;
 mod screenshot;
@@ -54,7 +53,6 @@ pub struct DeviceServices {
     pub provider: Arc<Mutex<Box<dyn idevice::provider::IdeviceProvider>>>,
     pub lockdown: Arc<Mutex<LockdownClient>>,
 }
-
 
 pub static APP_DEVICE_STATE: Lazy<Mutex<HashMap<String, DeviceServices>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
@@ -122,6 +120,9 @@ mod qobject {
 
         #[qsignal]
         fn no_pairing_file(self: Pin<&mut Core>, mac_address: &QString);
+
+        #[qsignal]
+        fn sleepy_time_detected(self: Pin<&mut Core>);
     }
     impl cxx_qt::Threading for Core {}
 }
@@ -638,7 +639,7 @@ async fn init_idescriptor_device<
         return None;
     }
     let mut hb = None;
-    
+
     if is_wireless {
         eprintln!("init_idescriptor_device: Attempting to connect to HeartbeatClient.");
         hb = match heartbeat::HeartbeatClient::connect(&provider).await {
@@ -735,7 +736,6 @@ async fn init_idescriptor_device<
         );
     }
 
-
     eprintln!("init_idescriptor_device: Storing device services.");
     let device_services = DeviceServices {
         afc: Arc::new(Mutex::new(afc_client)),
@@ -810,6 +810,19 @@ async fn spawn_heartbeat_task(
                 Err(e) => {
                     fails += 1;
                     eprintln!("heartbeat:  get_marco failed (fail count: {fails}): {e:?}");
+                    
+                    match e {
+                        IdeviceError::Heartbeat(idevice::HeartbeatError::SleepyTime) => {
+                            println!("heartbeat: Sleepy time");
+                            qt_thread
+                                .queue(move |core_qobj| {
+                                    core_qobj.sleepy_time_detected();
+                                })
+                                .ok();
+                        }
+                        _ => {}
+                    };
+
                     if fails >= 3 {
                         eprintln!("heartbeat: too many failures for  giving up");
                         clean_device_from_app_state(&udid_for_hb).await;
@@ -832,6 +845,17 @@ async fn spawn_heartbeat_task(
             if let Err(e) = hb_client.send_polo().await {
                 fails += 1;
                 eprintln!("heartbeat:  send_polo failed (fail count: {fails}): {e:?}");
+                match e {
+                    IdeviceError::Heartbeat(idevice::HeartbeatError::SleepyTime) => {
+                        println!("heartbeat: Sleepy time");
+                        qt_thread
+                            .queue(move |core_qobj| {
+                                core_qobj.sleepy_time_detected();
+                            })
+                            .ok();
+                    }
+                    _ => {}
+                };
                 if fails >= 3 {
                     eprintln!("heartbeat: too many failures for , giving up");
                     clean_device_from_app_state(&udid_for_hb).await;

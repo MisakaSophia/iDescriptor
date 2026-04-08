@@ -70,12 +70,12 @@ DeviceManagerWidget::DeviceManagerWidget(QWidget *parent)
     connect(AppContext::sharedInstance(), &AppContext::devicePaired, this,
             [this](const std::shared_ptr<iDescriptorDevice> device) {
                 addPairedDevice(device);
-                // SettingsManager::sharedInstance()->doIfEnabled(
-                //     SettingsManager::Setting::SwitchToNewDevice,
-                //     [this, device]() {
-                //         AppContext::sharedInstance()->setCurrentDeviceSelection(
-                //             DeviceSelection(device->udid));
-                //     });
+                SettingsManager::sharedInstance()->doIfEnabled(
+                    SettingsManager::Setting::SwitchToNewDevice,
+                    [this, device]() {
+                        AppContext::sharedInstance()->setCurrentDeviceSelection(
+                            DeviceSelection(device->udid));
+                    });
 
                 updateUI();
             });

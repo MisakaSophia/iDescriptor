@@ -21,13 +21,25 @@
 #define MAINWINDOW_H
 #include "ZDownloader.h"
 #include "ZUpdater.h"
+#include "devicesleepwarningwidget.h"
 #include "iDescriptor-ui.h"
 #include "iDescriptor.h"
 #include "iomanagerclient.h"
 #include "ztabwidget.h"
+#include <QApplication>
+#include <QDateTime>
+#include <QDesktopServices>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QMainWindow>
+#include <QMenu>
+#include <QMenuBar>
+#include <QMessageBox>
+#include <QStack>
 #include <QStackedWidget>
+#include <QTimer>
+#include <QVBoxLayout>
+#include <QWidget>
 
 class DeviceManagerWidget;
 
@@ -43,6 +55,7 @@ public:
     void raiseDeviceTab();
     void showConnectedDevicesTab();
     void showWelcomeTab();
+    void handleShowSleepyDeviceWarning();
 public slots:
     void updateNoDevicesConnected();
 

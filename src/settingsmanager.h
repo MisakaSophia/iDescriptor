@@ -138,6 +138,11 @@ public:
     void setWinBackdropType(WIN_BACKDROP type);
     WIN_BACKDROP winBackdropType() const;
 #endif
+
+    bool isSleepyDeviceWarningDismissed() const;
+    void setIsSleepyDeviceWarningDismissed(bool dismissed);
+    void dismissSleepyDeviceWarning();
+
 signals:
     void favoritePlacesChanged();
     void recentLocationsChanged();

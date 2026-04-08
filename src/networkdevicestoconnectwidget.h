@@ -39,6 +39,7 @@ public:
 
 private:
     QPushButton *m_connectButton = nullptr;
+    NetworkDevice m_device;
 
 public:
     void failed();
@@ -46,6 +47,7 @@ public:
     void initStarted();
     void connected();
     void alreadyExists();
+    NetworkDevice getDevice() { return m_device; };
 };
 
 class NetworkDevicesToConnectWidget : public QWidget
@@ -70,7 +72,7 @@ private:
     void createDeviceCard(const NetworkDevice &device);
     void clearDeviceCards();
     void updateDeviceList();
-
+    void eval();
     QGroupBox *m_deviceGroup = nullptr;
     QScrollArea *m_scrollArea = nullptr;
     QWidget *m_scrollContent = nullptr;

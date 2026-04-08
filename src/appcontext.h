@@ -45,7 +45,9 @@ public:
     const QString getCachedPairingFile(const QString &udid) const;
     CXX::Core *core = new CXX::Core(this);
     CXX::IOManager *ioManager = new CXX::IOManager(this);
-    void tryToConnectToNetworkDevice(const NetworkDevice &device);
+    void tryToConnectToNetworkDevice(const NetworkDevice &device,
+                                     bool forceCache = true,
+                                     bool setSelectionIfExists = true);
 #ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
     QList<iDescriptorRecoveryDevice *> getAllRecoveryDevices();
 #endif

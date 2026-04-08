@@ -306,7 +306,10 @@ impl qobject::HauseArrest {
             true
         });
         if !inserted {
-            eprintln!("start_video_stream: failed to insert video stream for udid={} path={}", udid_str, cloned_path);
+            eprintln!(
+                "start_video_stream: failed to insert video stream for udid={} path={}",
+                udid_str, cloned_path
+            );
             return QString::default();
         }
         eprintln!(
