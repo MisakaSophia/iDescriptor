@@ -169,7 +169,11 @@ void MediaPreviewDialog::loadMedia()
 
 void MediaPreviewDialog::loadImage()
 {
-    auto callback = [this](const QPixmap &pixmap) {
+    QPointer<MediaPreviewDialog> safeThis(this);
+    auto callback = [this, safeThis](const QPixmap &pixmap) {
+        if (!safeThis) {
+            return;
+        }
         if (!pixmap.isNull()) {
             onImageLoaded(pixmap);
         } else {
