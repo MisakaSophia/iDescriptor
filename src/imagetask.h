@@ -3,13 +3,13 @@
 
 #include "iDescriptor-ui.h"
 #include "iDescriptor.h"
+#include "imageloader.h"
+#include <QGuiApplication>
 #include <QImage>
 #include <QObject>
 #include <QPixmap>
 #include <QRunnable>
 #include <QString>
-
-#include "imageloader.h"
 
 class ImageTask : public QObject, public QRunnable
 {
@@ -27,30 +27,32 @@ public:
     }
 
 signals:
-    void finished(const QString &path, const QPixmap &image, unsigned int row);
+    void finished(const QString &path, const QImage &image, unsigned int row);
 
 protected:
     void run() override
     {
-        bool isVideo = iDescriptor::Utils::isVideoFile(m_path);
+        if (QCoreApplication::closingDown()) {
+            return;
+        }
+
+        const bool isVideo = iDescriptor::Utils::isVideoFile(m_path);
 
         if (isVideo) {
-            QPixmap thumbnail = ImageLoader::generateVideoThumbnailFFmpeg(
+            QImage image = ImageLoader::generateVideoThumbnailFFmpeg(
                 m_device, m_path, THUMBNAIL_SIZE, m_hause_arrest, m_useAfc2);
+            emit finished(m_path, image, m_row);
+            return;
+        }
 
-            emit finished(m_path, thumbnail, m_row);
+        if (m_isThumbnail) {
+            QImage image = ImageLoader::loadThumbnailFromDevice(
+                m_device, m_path, THUMBNAIL_SIZE, m_hause_arrest, m_useAfc2);
+            emit finished(m_path, image, m_row);
         } else {
-            if (m_isThumbnail) {
-                QPixmap image = ImageLoader::loadThumbnailFromDevice(
-                    m_device, m_path, THUMBNAIL_SIZE, m_hause_arrest,
-                    m_useAfc2);
-                emit finished(m_path, image, m_row);
-            } else {
-                qDebug() << "Loading full image for:" << m_path;
-                QPixmap image = ImageLoader::loadImage(
-                    m_device, m_path, m_hause_arrest, m_useAfc2);
-                emit finished(m_path, image, m_row);
-            }
+            QImage image = ImageLoader::loadImage(m_device, m_path,
+                                                  m_hause_arrest, m_useAfc2);
+            emit finished(m_path, image, m_row);
         }
     }
 

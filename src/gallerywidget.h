@@ -70,7 +70,8 @@ private:
     void onAlbumListLoaded(const QList<QString> &dcimTree);
     void setControlsEnabled(bool enabled);
     QString selectExportDirectory();
-    QIcon loadAlbumThumbnail(const QString &albumPath);
+    static QImage loadAlbumThumbnail(const QString &albumPath,
+                                     std::shared_ptr<iDescriptorDevice> device);
     void loadAlbumThumbnailAsync(const QString &albumPath, QStandardItem *item);
     void onPhotoContextMenu(const QPoint &pos);
     PhotoModel::FilterType getCurrentFilterType() const;

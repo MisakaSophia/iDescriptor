@@ -24,12 +24,12 @@
 #include <QPixmap>
 #include <libheif/heif.h>
 
-QPixmap load_heic(const QByteArray &imageData)
+QImage load_heic(const QByteArray &imageData)
 {
     heif_context *ctx = heif_context_alloc();
     if (!ctx) {
         qWarning() << "Failed to allocate heif_context";
-        return QPixmap();
+        return QImage();
     }
 
     heif_error err = heif_context_read_from_memory(ctx, imageData.constData(),
@@ -37,7 +37,7 @@ QPixmap load_heic(const QByteArray &imageData)
     if (err.code != heif_error_Ok) {
         qWarning() << "Failed to read HEIC from memory:" << err.message;
         heif_context_free(ctx);
-        return QPixmap();
+        return QImage();
     }
 
     heif_image_handle *handle;
@@ -45,7 +45,7 @@ QPixmap load_heic(const QByteArray &imageData)
     if (err.code != heif_error_Ok) {
         qWarning() << "Failed to get primary image handle:" << err.message;
         heif_context_free(ctx);
-        return QPixmap();
+        return QImage();
     }
 
     heif_image *img;
@@ -55,7 +55,7 @@ QPixmap load_heic(const QByteArray &imageData)
         qWarning() << "Failed to decode HEIC image:" << err.message;
         heif_image_handle_release(handle);
         heif_context_free(ctx);
-        return QPixmap();
+        return QImage();
     }
 
     int width = heif_image_get_width(img, heif_channel_interleaved);
@@ -73,15 +73,15 @@ QPixmap load_heic(const QByteArray &imageData)
         heif_image_release(img);
         heif_image_handle_release(handle);
         heif_context_free(ctx);
-        return QPixmap();
+        return QImage();
     }
 
     QImage qimg(data, width, height, stride, QImage::Format_RGB888);
-    QPixmap result = QPixmap::fromImage(qimg);
-
+    QImage copy =
+        qimg.copy(); // Deep copy since the original data will be freed
     heif_image_release(img);
     heif_image_handle_release(handle);
     heif_context_free(ctx);
 
-    return result;
+    return copy;
 }

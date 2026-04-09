@@ -38,6 +38,8 @@ PhotoModel::PhotoModel(const std::shared_ptr<iDescriptorDevice> device,
     : QAbstractListModel(parent), m_device(device), m_sortOrder(NewestFirst),
       m_filterType(filterType)
 {
+    // 350 MB cache for thumbnails
+    m_cache.setMaxCost(350 * 1024 * 1024);
 }
 
 void PhotoModel::clear()
@@ -50,13 +52,8 @@ void PhotoModel::clear()
     m_photos.clear();
     m_allPhotos.clear();
     endResetModel();
-
+    m_cache.clear();
     qDebug() << "Cleared PhotoModel data";
-    // FIXME : bug we use the same loader on every device
-    // FIXME: we shouldn't do this
-    // QHashPrivate::Span<QHashPrivate::Node<QString, ImageTask *>>::hasNode
-    // qhash.h         310  0x5555559d50e1
-    // ImageLoader::sharedInstance().clear();
 }
 
 PhotoModel::~PhotoModel()
@@ -90,8 +87,8 @@ QVariant PhotoModel::data(const QModelIndex &index, int role) const
 
     case Qt::DecorationRole: {
         ImageLoader &imgloader = ImageLoader::sharedInstance();
-        // Check memory cache first
-        if (QPixmap *cached = imgloader.m_cache.object(info.filePath)) {
+        // Check cache first
+        if (QPixmap *cached = m_cache.object(info.filePath)) {
             return QIcon(*cached);
         }
 
@@ -126,7 +123,8 @@ void PhotoModel::onThumbnailReady(const QString &path, const QPixmap &pixmap,
                                   unsigned int rowHint)
 {
     Q_UNUSED(pixmap);
-
+    int cacheCost = pixmap.width() * pixmap.height() * pixmap.depth() / 8;
+    m_cache.insert(path, new QPixmap(pixmap), cacheCost);
     QMutexLocker locker(&m_mutex);
 
     int row = -1;
@@ -147,9 +145,7 @@ void PhotoModel::onThumbnailReady(const QString &path, const QPixmap &pixmap,
 
     if (row == -1) {
         // Thumbnail arrived for an item that is no longer in the model
-        qDebug() << "PhotoModel::onThumbnailReady: path not in current model:"
-                 << path << "(rowHint =" << rowHint
-                 << ", size =" << m_photos.size() << ")";
+        qDebug() << "PhotoModel::onThumbnailReady: path not in current model";
         return;
     }
 
@@ -158,42 +154,36 @@ void PhotoModel::onThumbnailReady(const QString &path, const QPixmap &pixmap,
     emit dataChanged(idx, idx, {Qt::DecorationRole});
 }
 
-bool PhotoModel::populatePhotoPaths()
+QPair<bool, QList<PhotoInfo>>
+PhotoModel::populatePhotoPaths(QString albumPath,
+                               std::shared_ptr<iDescriptorDevice> device)
 {
-    // FIXME:DEADLOCK?
-    // QMutexLocker locker(&m_mutex);
-    connect(&ImageLoader::sharedInstance(), &ImageLoader::thumbnailReady, this,
-            &PhotoModel::onThumbnailReady);
-    if (m_albumPath.isEmpty()) {
+
+    if (albumPath.isEmpty()) {
         qDebug() << "No album path set, skipping population";
-        return false;
+        return {false, {}};
     }
 
-    m_allPhotos.clear();
     QMap<QString, QVariant> photoPaths =
-        m_device->afc_backend->list_dir_with_creation_date(m_albumPath);
+        device->afc_backend->list_dir_with_creation_date(albumPath);
 
+    QList<PhotoInfo> photos;
     for (auto it = photoPaths.constBegin(); it != photoPaths.constEnd(); ++it) {
         const QString &fileName = it.key();
         const QVariant &creationDateVariant = it.value();
 
         if (iDescriptor::Utils::isGalleryFile(fileName)) {
             PhotoInfo info;
-            info.filePath = m_albumPath + "/" + fileName;
+            info.filePath = albumPath + "/" + fileName;
             info.fileName = fileName;
             info.thumbnailRequested = false;
             info.dateTime = creationDateVariant.toDateTime();
             info.fileType = determineFileType(fileName);
-            m_allPhotos.append(info);
+            photos.append(info);
         }
     }
 
-    // // Apply initial filtering and sorting, which will also reset the model
-    applyFilterAndSort();
-
-    qDebug() << "Loaded" << m_allPhotos.size() << "media files from device";
-    qDebug() << "After filtering:" << m_photos.size() << "items shown";
-    return true;
+    return {true, photos};
 }
 
 // Sorting and filtering methods
@@ -291,40 +281,58 @@ QStringList PhotoModel::getAllFilePaths() const
     return paths;
 }
 
-QStringList PhotoModel::getFilteredFilePaths() const
+QList<QString> PhotoModel::getFilteredFilePaths() const
 {
-    QStringList paths;
+    QList<QString> paths;
     for (const PhotoInfo &info : m_photos) {
         paths.append(info.filePath);
     }
     return paths;
 }
 
-PhotoInfo::FileType PhotoModel::determineFileType(const QString &fileName) const
+PhotoInfo::FileType PhotoModel::determineFileType(const QString &fileName)
 {
     if (iDescriptor::Utils::isVideoFile(fileName))
         return PhotoInfo::Video;
     return PhotoInfo::Image;
 }
 
-int count = 0;
 void PhotoModel::setAlbumPath(const QString &albumPath)
 {
     qDebug() << "Setting new album path:" << albumPath;
+
     clear();
+    connect(&ImageLoader::sharedInstance(), &ImageLoader::thumbnailReady, this,
+            &PhotoModel::onThumbnailReady, Qt::UniqueConnection);
 
     m_albumPath = albumPath;
-    QFutureWatcher<bool> *futureWatcher = new QFutureWatcher<bool>(this);
-    QFuture<bool> future =
-        QtConcurrent::run([this]() { return populatePhotoPaths(); });
+
+    const auto device = m_device;
+
+    auto *futureWatcher =
+        new QFutureWatcher<QPair<bool, QList<PhotoInfo>>>(this);
+
+    QFuture<QPair<bool, QList<PhotoInfo>>> future =
+        QtConcurrent::run([albumPath, device]() {
+            return populatePhotoPaths(albumPath, device);
+        });
+
     futureWatcher->setFuture(future);
-    connect(futureWatcher, &QFutureWatcher<bool>::finished, this,
+
+    connect(futureWatcher,
+            &QFutureWatcher<QPair<bool, QList<PhotoInfo>>>::finished, this,
             [this, futureWatcher]() {
+                const auto result = futureWatcher->result();
                 futureWatcher->deleteLater();
-                bool success = futureWatcher->result();
+
+                const bool success = result.first;
+                const QList<PhotoInfo> photos = result.second;
+
+                m_allPhotos = photos;
                 if (success) {
                     qDebug() << "Finished populating photo paths for album:"
                              << m_albumPath;
+                    applyFilterAndSort();
                     emit albumPathSet();
                 } else {
                     qDebug() << "Failed to populate photo paths for album:"
@@ -333,5 +341,3 @@ void PhotoModel::setAlbumPath(const QString &albumPath)
                 }
             });
 }
-// TODO:REMOVE
-void PhotoModel::refreshPhotos() { populatePhotoPaths(); }

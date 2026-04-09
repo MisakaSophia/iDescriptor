@@ -63,7 +63,6 @@ public:
 
     // Album management
     void setAlbumPath(const QString &albumPath);
-    void refreshPhotos();
 
     // Sorting and filtering
     void setSortOrder(SortOrder order);
@@ -78,7 +77,7 @@ public:
 
     // Get all items for export
     QStringList getAllFilePaths() const;
-    QStringList getFilteredFilePaths() const;
+    QList<QString> getFilteredFilePaths() const;
 
     void clear();
 
@@ -93,14 +92,17 @@ private:
     FilterType m_filterType;
 
     QMutex m_mutex;
+    QCache<QString, QPixmap> m_cache;
 
     // Helper methods
-    bool populatePhotoPaths();
+    static QPair<bool, QList<PhotoInfo>>
+    populatePhotoPaths(QString albumPath,
+                       std::shared_ptr<iDescriptorDevice> device);
     void applyFilterAndSort();
     void sortPhotos(QList<PhotoInfo> &photos) const;
     bool matchesFilter(const PhotoInfo &info) const;
 
-    PhotoInfo::FileType determineFileType(const QString &fileName) const;
+    static PhotoInfo::FileType determineFileType(const QString &fileName);
 
 private slots:
     void onThumbnailReady(const QString &path, const QPixmap &pixmap,

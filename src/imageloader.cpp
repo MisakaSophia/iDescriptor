@@ -16,9 +16,12 @@ extern "C" {
 ImageLoader::ImageLoader(QObject *parent) : QObject(parent)
 {
     // TODO: maybe finetune to hardware ?
-    m_pool.setMaxThreadCount(10);
-    // 350 MB cache for thumbnails
-    m_cache.setMaxCost(350);
+    m_pool.setMaxThreadCount(15);
+
+    if (qApp) {
+        connect(qApp, &QCoreApplication::aboutToQuit, this,
+                [this]() { clear(); });
+    }
 }
 
 bool ImageLoader::isLoading(const QString &path)
@@ -31,11 +34,6 @@ void ImageLoader::requestThumbnail(
     const std::shared_ptr<iDescriptorDevice> device, const QString &path,
     unsigned int row)
 {
-    if (auto *cached = m_cache.object(path)) {
-        emit thumbnailReady(path, *cached, row);
-        return;
-    }
-
     {
         QMutexLocker locker(&m_mutex);
         if (m_pendingTasks.contains(path))
@@ -66,26 +64,19 @@ void ImageLoader::requestImageWithCallback(
     int priority, std::function<void(const QPixmap &)> callback,
     std::optional<std::shared_ptr<CXX::HauseArrest>> hause_arrest, bool useAfc2)
 {
-
-    /*
-        FIXME:  row is passed as priority
-        nothing dangerous but a bit hacky, could be handled better
-    */                                                 //scale=false
     auto *task =
         new ImageTask(device, path, priority, false, hause_arrest, useAfc2);
 
-    /*
-        TODO: should we do this ?
-        this function is meant for the media preview dialog,
-        which only loads a image at a time
-        and not really related to the thumbnails in the photomodel
-    */
-    // m_pendingTasks[path] = task;
-
     connect(
         task, &ImageTask::finished, this,
-        [this, path, callback](const QString &, const QPixmap &pixmap,
-                               unsigned int row) { callback(pixmap); },
+        [callback](const QString &, const QImage &image, unsigned int) {
+            if (QCoreApplication::closingDown() ||
+                !QGuiApplication::instance()) {
+                callback(QPixmap());
+                return;
+            }
+            callback(image.isNull() ? QPixmap() : QPixmap::fromImage(image));
+        },
         Qt::QueuedConnection);
 
     m_pool.start(task, priority);
@@ -95,92 +86,59 @@ void ImageLoader::cancelThumbnail(const QString &path)
 {
     qDebug() << "Attempting to cancel thumbnail loading for" << path;
 
-    QMutexLocker locker(&m_mutex);
+    ImageTask *task = nullptr;
+    {
+        QMutexLocker locker(&m_mutex);
+        task = m_pendingTasks.take(path);
+    }
 
-    if (!m_pendingTasks.contains(path)) {
+    if (!task) {
         return;
     }
 
-    ImageTask *task = m_pendingTasks.value(path);
-    if (task && m_pool.tryTake(task)) {
+    if (m_pool.tryTake(task)) {
         qDebug() << "Cancelled thumbnail loading for" << path;
-        m_pendingTasks.remove(path);
+        // should be safe to delete
         delete task;
-    } else {
-        m_pendingTasks.remove(path);
     }
 }
 
 void ImageLoader::clear()
 {
     qDebug() << "Clearing ImageLoader cache and pending tasks";
-
     m_pool.clear();
+    m_pool.waitForDone();
 
-    {
-        QMutexLocker locker(&m_mutex);
-
-        for (auto it = m_pendingTasks.begin(); it != m_pendingTasks.end();) {
-            ImageTask *task = it.value();
-            if (task && m_pool.tryTake(task)) {
-                qDebug() << "Cancelled pending task";
-                // FIXME: should we do auto delete?
-                //  delete task;
-            }
-            it = m_pendingTasks.erase(it);
-        }
-    }
-
-    /*
-     TODO: This could make the UI unresponsive but
-     maybe a good approch to handle
-     async cancellation properly(wireless)
-     Wait for any running tasks to complete
-     */
-    // m_pool.waitForDone();
-
-    {
-        QMutexLocker locker(&m_mutex);
-        m_pendingTasks.clear();
-    }
-
-    m_cache.clear();
+    QMutexLocker locker(&m_mutex);
+    m_pendingTasks.clear();
 }
 
-void ImageLoader::onTaskFinished(const QString &path, const QPixmap &pixmap,
+void ImageLoader::onTaskFinished(const QString &path, const QImage &image,
                                  unsigned int row)
 {
-    ImageTask *task = nullptr;
-
     {
         QMutexLocker locker(&m_mutex);
-
         if (!m_pendingTasks.contains(path)) {
             return;
         }
-
-        task = m_pendingTasks.take(path);
+        m_pendingTasks.remove(path);
     }
 
-    // FIXME
-    // if (task) {
-    //     delete task;
-    // }
+    if (QCoreApplication::closingDown() || !QGuiApplication::instance()) {
+        return;
+    }
 
-    // Cache
-    m_cache.insert(path, new QPixmap(pixmap));
-
+    const QPixmap pixmap =
+        image.isNull() ? QPixmap() : QPixmap::fromImage(image);
     emit thumbnailReady(path, pixmap, row);
 }
 
 // almost a copy of loadThumbnailFromDevice but without any scaling logic
-QPixmap ImageLoader::loadImage(
+QImage ImageLoader::loadImage(
     const std::shared_ptr<iDescriptorDevice> device, const QString &filePath,
     std::optional<std::shared_ptr<CXX::HauseArrest>> hause_arrest, bool useAfc2)
 {
-    if (QCoreApplication::closingDown()) {
-        qDebug() << "Application is closing, aborting loadImage for"
-                 << filePath;
+    if (QCoreApplication::closingDown() || !QGuiApplication::instance()) {
         return {};
     }
     QByteArray imageData;
@@ -194,14 +152,9 @@ QPixmap ImageLoader::loadImage(
         imageData = device->afc_backend->file_to_buffer(filePath);
     }
 
-    if (imageData.isEmpty()) {
-        qDebug() << "Could not read from device:" << filePath;
-        return {};
-    }
-
     if (filePath.endsWith(".HEIC", Qt::CaseInsensitive)) {
-        QPixmap img = load_heic(imageData);
-        return img.isNull() ? QPixmap() : img;
+        QImage img = load_heic(imageData);
+        return img.isNull() ? QImage() : img;
     }
 
     QBuffer buffer(&imageData);
@@ -211,31 +164,24 @@ QPixmap ImageLoader::loadImage(
     if (reader.canRead()) {
         QImage image = reader.read();
         if (!image.isNull()) {
-            return QPixmap::fromImage(image);
+            return image;
         }
-        qDebug() << "QImageReader failed to decode" << filePath
-                 << "Error:" << reader.errorString();
     }
 
-    // Fallback for formats QImageReader might struggle with
-    QPixmap pixmap;
-    if (pixmap.loadFromData(imageData)) {
-        return pixmap;
+    QImage fallback;
+    if (fallback.loadFromData(imageData)) {
+        return fallback;
     }
 
-    qDebug() << "Could not decode image data for:" << filePath;
     return {};
 }
 
-QPixmap ImageLoader::loadThumbnailFromDevice(
+QImage ImageLoader::loadThumbnailFromDevice(
     const std::shared_ptr<iDescriptorDevice> device, const QString &filePath,
     const QSize &size,
     std::optional<std::shared_ptr<CXX::HauseArrest>> hause_arrest, bool useAfc2)
 {
-    if (QCoreApplication::closingDown()) {
-        qDebug()
-            << "Application is closing, aborting loadThumbnailFromDevice for"
-            << filePath;
+    if (QCoreApplication::closingDown() || !QGuiApplication::instance()) {
         return {};
     }
 
@@ -250,14 +196,9 @@ QPixmap ImageLoader::loadThumbnailFromDevice(
         imageData = device->afc_backend->file_to_buffer(filePath);
     }
 
-    if (imageData.isEmpty()) {
-        qDebug() << "Could not read from device:" << filePath;
-        return {};
-    }
-
     if (filePath.endsWith(".HEIC", Qt::CaseInsensitive)) {
-        QPixmap img = load_heic(imageData);
-        return img.isNull() ? QPixmap()
+        QImage img = load_heic(imageData);
+        return img.isNull() ? QImage()
                             : img.scaled(size, Qt::KeepAspectRatio,
                                          Qt::SmoothTransformation);
     }
@@ -269,31 +210,26 @@ QPixmap ImageLoader::loadThumbnailFromDevice(
     if (reader.canRead()) {
         QImage image = reader.read();
         if (!image.isNull()) {
-            QImage scaled = image.scaled(size, Qt::KeepAspectRatio,
-                                         Qt::SmoothTransformation);
-            return QPixmap::fromImage(scaled);
+            return image.scaled(size, Qt::KeepAspectRatio,
+                                Qt::SmoothTransformation);
         }
-        qDebug() << "QImageReader failed to decode" << filePath
-                 << "Error:" << reader.errorString();
     }
 
-    // Fallback for formats QImageReader might struggle with
-    QPixmap original;
-    if (original.loadFromData(imageData)) {
-        return original.scaled(size, Qt::KeepAspectRatio,
+    QImage fallback;
+    if (fallback.loadFromData(imageData)) {
+        return fallback.scaled(size, Qt::KeepAspectRatio,
                                Qt::SmoothTransformation);
     }
 
-    qDebug() << "Could not decode image data for:" << filePath;
     return {};
 }
 
-QPixmap ImageLoader::generateVideoThumbnailFFmpeg(
+QImage ImageLoader::generateVideoThumbnailFFmpeg(
     const std::shared_ptr<iDescriptorDevice> device, const QString &filePath,
     const QSize &requestedSize,
     std::optional<std::shared_ptr<CXX::HauseArrest>> hause_arrest, bool useAfc2)
 {
-    QPixmap thumbnail;
+    QImage thumbnail;
     if (QCoreApplication::closingDown()) {
         qDebug() << "Application is closing, aborting "
                     "generateVideoThumbnailFFmpeg for"
@@ -551,9 +487,9 @@ QPixmap ImageLoader::generateVideoThumbnailFFmpeg(
                         might need to abstract the main logic to get the frame
                         and handle scaling separately
                     */
-                    thumbnail = QPixmap::fromImage(
+                    thumbnail =
                         imgCopy.scaled(requestedSize, Qt::KeepAspectRatio,
-                                       Qt::SmoothTransformation));
+                                       Qt::SmoothTransformation);
                 }
 
                 av_frame_free(&rgbFrame);

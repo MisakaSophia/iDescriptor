@@ -20,6 +20,7 @@
 #include "gallerywidget.h"
 #include "iDescriptor-ui.h"
 #include "iDescriptor.h"
+#include "imageloader.h"
 #include "iomanagerclient.h"
 #include "mediapreviewdialog.h"
 #include "photomodel.h"
@@ -42,14 +43,12 @@
 #include <QVBoxLayout>
 #include <QtConcurrent/QtConcurrent>
 
-// todo: dont load paths on main thread, handle
 /*
     FIXME: this needs to be refactored once we
     figure out how to query Photos.sqlite
     Check out:
     https://github.com/ScottKjr3347/iOS_Local_PL_Photos.sqlite_Queries
 */
-
 GalleryWidget::GalleryWidget(const std::shared_ptr<iDescriptorDevice> device,
                              QWidget *parent)
     : QWidget{parent}, m_device(device)
@@ -295,9 +294,7 @@ void GalleryWidget::onExportSelected()
 
     QList<QString> exportItems;
     for (const QString &filePath : filePaths) {
-        QString fileName = filePath.split('/').last();
         exportItems.append(filePath);
-        // exportItems.append(ExportItem(filePath, fileName, m_device->udid));
     }
 
     qDebug() << "Starting export of selected files:" << exportItems.size()
@@ -335,14 +332,14 @@ void GalleryWidget::onExportAll()
     if (!m_model)
         return;
 
-    QStringList filePaths = m_model->getFilteredFilePaths();
+    QList<QString> exportItems = m_model->getFilteredFilePaths();
 
-    if (filePaths.isEmpty()) {
+    if (exportItems.isEmpty()) {
         QMessageBox::information(this, "No Items", "No items to export.");
         return;
     }
     QString message =
-        QString("Export all %1 items currently shown?").arg(filePaths.size());
+        QString("Export all %1 items currently shown?").arg(exportItems.size());
     int reply = QMessageBox::question(this, "Export All", message,
                                       QMessageBox::Yes | QMessageBox::No,
                                       QMessageBox::No);
@@ -354,11 +351,6 @@ void GalleryWidget::onExportAll()
     QString exportDir = selectExportDirectory();
     if (exportDir.isEmpty()) {
         return;
-    }
-
-    QList<QString> exportItems;
-    for (const QString &filePath : filePaths) {
-        QString fileName = filePath.split('/').last();
     }
 
     qDebug() << "Starting export of:" << exportItems.size() << "items to"
@@ -590,8 +582,11 @@ void GalleryWidget::setControlsEnabled(bool enabled)
 {
     m_sortComboBox->setEnabled(enabled);
     m_filterComboBox->setEnabled(enabled);
-    m_exportSelectedButton->setEnabled(
-        enabled && m_listView && m_listView->selectionModel()->hasSelection());
+
+    const bool hasSelection = m_listView && m_listView->selectionModel() &&
+                              m_listView->selectionModel()->hasSelection();
+
+    m_exportSelectedButton->setEnabled(enabled && hasSelection);
 }
 
 /*
@@ -600,21 +595,24 @@ void GalleryWidget::setControlsEnabled(bool enabled)
     Check out:
     https://github.com/ScottKjr3347/iOS_Local_PL_Photos.sqlite_Queries
 */
-QIcon GalleryWidget::loadAlbumThumbnail(const QString &albumPath)
+QImage
+GalleryWidget::loadAlbumThumbnail(const QString &albumPath,
+                                  std::shared_ptr<iDescriptorDevice> device)
 {
-    // Get album directory contents
-    QList<QString> albumTree = m_device->afc_backend->list_dir(albumPath);
-
-    if (albumTree.isEmpty()) {
-        qDebug() << "Failed to read album directory:" << albumPath;
-        return QIcon();
+    if (QCoreApplication::closingDown() || !QGuiApplication::instance()) {
+        return {};
     }
 
-    // Find the first image file
+    QList<QString> albumTree = device->afc_backend->list_dir(albumPath);
+    if (albumTree.isEmpty()) {
+        qDebug() << "Failed to read album directory:" << albumPath;
+        return {};
+    }
+
     QString firstImagePath;
     for (const QString &fileName : albumTree) {
         bool isDir =
-            m_device->afc_backend->is_directory((albumPath + "/" + fileName));
+            device->afc_backend->is_directory((albumPath + "/" + fileName));
         if (!isDir && (fileName.endsWith(".JPG", Qt::CaseInsensitive) ||
                        fileName.endsWith(".PNG", Qt::CaseInsensitive) ||
                        fileName.endsWith(".HEIC", Qt::CaseInsensitive))) {
@@ -624,56 +622,54 @@ QIcon GalleryWidget::loadAlbumThumbnail(const QString &albumPath)
     }
 
     if (firstImagePath.isEmpty()) {
-        qDebug() << "No images found in album:" << albumPath;
-        return QIcon();
+        return {};
     }
 
-    QByteArray imageData =
-        m_device->afc_backend->file_to_buffer(firstImagePath);
+    QByteArray imageData = device->afc_backend->file_to_buffer(firstImagePath);
 
-    if (imageData.isEmpty()) {
-        qDebug() << "Could not read image data for thumbnail:" << albumPath;
-        return QIcon();
-    }
-
-    QPixmap thumbnail;
-
-    // Load HEIC
+    QImage thumbnail;
     if (firstImagePath.endsWith(".HEIC", Qt::CaseInsensitive)) {
-        qDebug() << "Loading HEIC thumbnail from:" << firstImagePath;
         thumbnail = load_heic(imageData);
     } else {
-        // Load other formats
-        if (!thumbnail.loadFromData(imageData)) {
-            qDebug() << "Could not decode image data for thumbnail:"
-                     << firstImagePath;
-            return QIcon();
-        }
+        thumbnail.loadFromData(imageData);
     }
 
-    if (thumbnail.isNull()) {
-        qDebug() << "Failed to load thumbnail from:" << firstImagePath;
-        return QIcon();
-    }
-
-    return QIcon(thumbnail);
+    return thumbnail;
 }
 
 void GalleryWidget::loadAlbumThumbnailAsync(const QString &albumPath,
                                             QStandardItem *item)
 {
-    auto *watcher = new QFutureWatcher<QIcon>(this);
+    Q_UNUSED(item);
 
-    connect(watcher, &QFutureWatcher<QIcon>::finished, this, [watcher, item]() {
-        QIcon result = watcher->result();
-        if (!result.isNull()) {
-            item->setIcon(result);
-        }
-        watcher->deleteLater();
+    auto *watcher = new QFutureWatcher<QImage>(this);
+    const auto device = m_device;
+
+    connect(watcher, &QFutureWatcher<QImage>::finished, this,
+            [this, watcher, albumPath]() {
+                const QImage result = watcher->result();
+                watcher->deleteLater();
+
+                if (result.isNull() || !m_albumModel ||
+                    QCoreApplication::closingDown() ||
+                    !QGuiApplication::instance()) {
+                    return;
+                }
+
+                for (int row = 0; row < m_albumModel->rowCount(); ++row) {
+                    QModelIndex idx = m_albumModel->index(row, 0);
+                    if (idx.data(Qt::UserRole).toString() == albumPath) {
+                        if (auto *it = m_albumModel->itemFromIndex(idx)) {
+                            it->setIcon(QIcon(QPixmap::fromImage(result)));
+                        }
+                        break;
+                    }
+                }
+            });
+
+    QFuture<QImage> future = QtConcurrent::run([albumPath, device]() {
+        return loadAlbumThumbnail(albumPath, device);
     });
-
-    QFuture<QIcon> future = QtConcurrent::run(
-        [this, albumPath]() { return loadAlbumThumbnail(albumPath); });
 
     watcher->setFuture(future);
 }

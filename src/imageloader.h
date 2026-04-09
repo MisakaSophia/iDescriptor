@@ -3,6 +3,7 @@
 
 #include "iDescriptor.h"
 #include <QCache>
+#include <QGuiApplication>
 #include <QHash>
 #include <QImage>
 #include <QMutex>
@@ -12,8 +13,6 @@
 #include <QThreadPool>
 
 class ImageTask;
-
-typedef struct AfcClient *AfcClientHandle;
 
 class ImageLoader : public QObject
 {
@@ -36,30 +35,31 @@ public:
     void cancelThumbnail(const QString &path);
     bool isLoading(const QString &path);
     void clear();
-    QCache<QString, QPixmap> m_cache;
-    static QPixmap loadThumbnailFromDevice(
+    static QImage loadThumbnailFromDevice(
         const std::shared_ptr<iDescriptorDevice> device,
         const QString &filePath, const QSize &size,
         std::optional<std::shared_ptr<CXX::HauseArrest>> hause_arrest =
             std::nullopt,
         bool useAfc2 = false);
-    static QPixmap generateVideoThumbnailFFmpeg(
+
+    static QImage generateVideoThumbnailFFmpeg(
         const std::shared_ptr<iDescriptorDevice> device,
         const QString &filePath, const QSize &size,
         std::optional<std::shared_ptr<CXX::HauseArrest>> hause_arrest =
             std::nullopt,
         bool useAfc2 = false);
-    static QPixmap loadImage(const std::shared_ptr<iDescriptorDevice> device,
-                             const QString &filePath,
-                             std::optional<std::shared_ptr<CXX::HauseArrest>>
-                                 hause_arrest = std::nullopt,
-                             bool useAfc2 = false);
+
+    static QImage loadImage(const std::shared_ptr<iDescriptorDevice> device,
+                            const QString &filePath,
+                            std::optional<std::shared_ptr<CXX::HauseArrest>>
+                                hause_arrest = std::nullopt,
+                            bool useAfc2 = false);
 signals:
     void thumbnailReady(const QString &path, const QPixmap &image,
                         unsigned int row);
 
 private slots:
-    void onTaskFinished(const QString &path, const QPixmap &image,
+    void onTaskFinished(const QString &path, const QImage &image,
                         unsigned int row);
 
 private:
