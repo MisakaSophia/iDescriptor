@@ -237,8 +237,8 @@ void fullDeviceInfo(const pugi::xml_document &doc, DeviceInfo &d)
             // "FSTotalBytes: 63966400512"
             // "FSFreeBytes: 2867101696"
             // "FSBlockSize: 4096"
-            pugi::xml_node afc_info_node = dict.child("AFC_INFO");
-
+            XmlPlistDict root(dict);
+            pugi::xml_node afc_info_node = root["AFC_INFO"].getNode();
             if (afc_info_node) {
                 // FIXME: could be handled better
                 auto safeGetAfcString = [&](const char *key) -> std::string {
