@@ -9,16 +9,46 @@
 #include "zloadingwidget.h"
 #include <QDialog>
 #include <QMessageBox>
+#include <QMutex>
+#include <QObject>
+#include <QThread>
 #include <QTimer>
 #include <QWidget>
-#include <QtConcurrent>
-#include <atomic>
+
 
 struct ScanResult {
     bool ok;
-    size_t count;
+    quint64 count;
     QStringList items;
 };
+
+class AlbumScanWorker : public QObject
+{
+    Q_OBJECT
+public:
+    explicit AlbumScanWorker(const std::shared_ptr<iDescriptorDevice> &device)
+        : m_device(device)
+    {
+    }
+
+public slots:
+    void scanAlbums(const QStringList &paths);
+    void calculateTotalSize(const QStringList &items);
+    void cancel();
+
+signals:
+    void scanFinished(bool ok, quint64 count, const QStringList &items);
+    void totalSizeProgress(quint64 totalSize);
+    void totalSizeFinished(quint64 totalSize);
+
+private:
+    bool isCancelled();
+
+    const std::shared_ptr<iDescriptorDevice> m_device;
+    QMutex m_cancelMutex;
+    bool m_cancelRequested = false;
+};
+
 class ExportAlbum : public QDialog
 {
     Q_OBJECT
@@ -27,8 +57,14 @@ public:
                          const QStringList &paths, QWidget *parent = nullptr);
     ~ExportAlbum();
 
+signals:
+    void requestScan(const QStringList &paths);
+    void requestTotalSize(const QStringList &items);
+    void requestCancelWorker();
+
 private:
-    QFutureWatcher<ScanResult> *m_watcher = nullptr;
+    QThread *m_workerThread = nullptr;
+    AlbumScanWorker *m_worker = nullptr;
     ZLoadingWidget *m_loadingWidget;
     const std::shared_ptr<iDescriptorDevice> m_device;
     QLabel *m_infoLabel;
@@ -37,10 +73,10 @@ private:
     ZDirPickerLabel *m_dirPickerLabel;
     QLabel *m_totalSizeExportLabel;
     QProcessIndicator *m_loadingIndicator = nullptr;
-    std::atomic<uint64_t> m_totalExportSize{0};
-    std::atomic<bool> m_exiting{false};
+    quint64 m_totalExportSize = 0;
+    bool m_exiting = false;
     void getTotalPhotoCount(const QStringList &paths);
-    void updateInfoLabel(size_t photoCount);
+    void updateInfoLabel(quint64 photoCount);
     // startExport(const QStringList &paths, const QString &exportDir);
     void startExport();
     void calculateTotalExportSize();

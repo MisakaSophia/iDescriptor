@@ -1,5 +1,76 @@
 #include "exportalbum.h"
 
+void AlbumScanWorker::scanAlbums(const QStringList &paths)
+{
+    {
+        QMutexLocker locker(&m_cancelMutex);
+        m_cancelRequested = false;
+    }
+
+    ScanResult res{true, 0, {}};
+
+    for (const QString &path : paths) {
+        if (isCancelled()) {
+            return;
+        }
+
+        QList<QString> items = m_device->afc_backend->list_files_flat(path);
+
+        if (items.isEmpty()) {
+            res.ok = false;
+            continue;
+        }
+
+        for (const QString &item : items) {
+            if (isCancelled()) {
+                return;
+            }
+            if (item.isEmpty())
+                continue;
+            res.items.append(item);
+        }
+        res.count += static_cast<quint64>(items.size());
+    }
+
+    emit scanFinished(res.ok, res.count, res.items);
+}
+
+void AlbumScanWorker::calculateTotalSize(const QStringList &items)
+{
+    {
+        QMutexLocker locker(&m_cancelMutex);
+        m_cancelRequested = false;
+    }
+
+    quint64 totalSize = 0;
+
+    for (const QString &item : items) {
+        if (isCancelled()) {
+            return;
+        }
+
+        int size = m_device->afc_backend->get_file_size(item);
+        if (size > 0) {
+            totalSize += static_cast<quint64>(size);
+        }
+        emit totalSizeProgress(totalSize);
+    }
+
+    emit totalSizeFinished(totalSize);
+}
+
+void AlbumScanWorker::cancel()
+{
+    QMutexLocker locker(&m_cancelMutex);
+    m_cancelRequested = true;
+}
+
+bool AlbumScanWorker::isCancelled()
+{
+    QMutexLocker locker(&m_cancelMutex);
+    return m_cancelRequested;
+}
+
 ExportAlbum::ExportAlbum(const std::shared_ptr<iDescriptorDevice> device,
                          const QStringList &paths, QWidget *parent)
     : QDialog(parent), m_device(device), m_listCount(paths.size())
@@ -14,11 +85,74 @@ ExportAlbum::ExportAlbum(const std::shared_ptr<iDescriptorDevice> device,
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
     mainLayout->addWidget(m_loadingWidget);
 
-    getTotalPhotoCount(paths);
+    m_workerThread = new QThread(this);
+    m_worker = new AlbumScanWorker(m_device);
+    m_worker->moveToThread(m_workerThread);
+
+    connect(m_workerThread, &QThread::finished, m_worker,
+            &QObject::deleteLater);
+    connect(this, &ExportAlbum::requestScan, m_worker,
+            &AlbumScanWorker::scanAlbums, Qt::QueuedConnection);
+    connect(this, &ExportAlbum::requestTotalSize, m_worker,
+            &AlbumScanWorker::calculateTotalSize, Qt::QueuedConnection);
+    connect(this, &ExportAlbum::requestCancelWorker, m_worker,
+            &AlbumScanWorker::cancel, Qt::QueuedConnection);
+
+    connect(m_worker, &AlbumScanWorker::scanFinished, this,
+            [this](bool ok, quint64 count, const QStringList &items) {
+                qDebug() << "Total photo count:" << count << "with"
+                         << (ok ? 0 : 1) << "errors";
+
+                if (m_exiting) {
+                    return;
+                }
+
+                if (ok) {
+                    m_exportItems = items;
+                    updateInfoLabel(count);
+                    calculateTotalExportSize();
+                    m_loadingWidget->stop();
+                } else {
+                    QMessageBox::warning(
+                        nullptr, "Error",
+                        "Failed to read directory: cannot export album(s)");
+                    reject();
+                }
+            });
+
+    connect(
+        m_worker, &AlbumScanWorker::totalSizeProgress, this,
+        [this](quint64 totalSize) {
+            if (m_exiting) {
+                return;
+            }
+            m_totalExportSize = totalSize;
+            m_totalSizeExportLabel->setText(
+                QString("Total size to export: %1")
+                    .arg(iDescriptor::Utils::formatSize(m_totalExportSize)));
+        });
+
+    connect(
+        m_worker, &AlbumScanWorker::totalSizeFinished, this,
+        [this](quint64 totalSize) {
+            if (m_exiting) {
+                return;
+            }
+            m_totalExportSize = totalSize;
+            m_totalSizeExportLabel->setText(
+                QString("Total size to export: %1")
+                    .arg(iDescriptor::Utils::formatSize(m_totalExportSize)));
+            m_loadingIndicator->stop();
+            m_loadingIndicator->hide();
+        });
+
+    m_workerThread->start();
+
     connect(AppContext::sharedInstance(), &AppContext::deviceRemoved, this,
             [this](const QString &udid) {
                 if (udid == m_device->udid) {
                     m_exiting = true;
+                    emit requestCancelWorker();
                     QTimer::singleShot(0, this, [this]() { close(); });
                 }
             });
@@ -54,10 +188,12 @@ ExportAlbum::ExportAlbum(const std::shared_ptr<iDescriptorDevice> device,
 
     connect(cancelButton, &QPushButton::clicked, this, [this]() {
         m_exiting = true;
+        emit requestCancelWorker();
         QTimer::singleShot(0, this, [this]() { close(); });
     });
     connect(exportButton, &QPushButton::clicked, this, [this, exportButton]() {
         m_exiting = true;
+        emit requestCancelWorker();
         exportButton->setEnabled(false);
         QTimer::singleShot(0, this, [this]() {
             startExport();
@@ -67,6 +203,8 @@ ExportAlbum::ExportAlbum(const std::shared_ptr<iDescriptorDevice> device,
 
     m_loadingWidget->setupContentWidget(contentWidget);
 
+    getTotalPhotoCount(paths);
+
     connect(this, &QDialog::finished, this, [this](int) {
         m_exiting = true;
         deleteLater();
@@ -75,58 +213,10 @@ ExportAlbum::ExportAlbum(const std::shared_ptr<iDescriptorDevice> device,
 
 void ExportAlbum::getTotalPhotoCount(const QStringList &paths)
 {
-
-    m_watcher = new QFutureWatcher<ScanResult>(this);
-
-    connect(m_watcher, &QFutureWatcher<ScanResult>::finished, this, [this]() {
-        ScanResult result = m_watcher->result();
-        qDebug() << "Total photo count:" << result.count << "with"
-                 << (result.ok ? 0 : 1) << "errors";
-
-        if (result.ok) {
-            m_exportItems = std::move(result.items);
-            updateInfoLabel(result.count);
-            calculateTotalExportSize();
-            m_loadingWidget->stop();
-        } else {
-            QMessageBox::warning(
-                nullptr, "Error",
-                "Failed to read directory: cannot export album(s)");
-            reject();
-        }
-
-        m_watcher->deleteLater();
-        m_watcher = nullptr;
-    });
-
-    // FIXME: if a dir returns empty, it could be an error or just an empty
-    // dir, we should check that
-    m_watcher->setFuture(QtConcurrent::run([device = m_device,
-                                            paths]() -> ScanResult {
-        ScanResult res{true, 0, {}};
-
-        for (const QString &path : paths) {
-            QList<QString> items = device->afc_backend->list_files_flat(path);
-
-            if (items.isEmpty()) {
-                res.ok = false;
-                continue;
-            }
-
-            for (const QString &item : items) {
-                if (item.isEmpty())
-                    continue;
-                res.items.append(item);
-            }
-            res.count += items.size();
-        }
-        qDebug() << "[m_watcher] Finished scanning albums, total items found:"
-                 << res.count;
-        return res;
-    }));
+    emit requestScan(paths);
 }
 
-void ExportAlbum::updateInfoLabel(size_t photoCount)
+void ExportAlbum::updateInfoLabel(quint64 photoCount)
 {
     m_infoLabel->setText(QString("Are you sure you want to export %1 album(s) "
                                  "with %2 photo(s)/video(s) ?")
@@ -144,54 +234,18 @@ void ExportAlbum::startExport()
 void ExportAlbum::calculateTotalExportSize()
 {
     m_totalExportSize = 0;
+    m_totalSizeExportLabel->setText("Total size to export: 0 MB");
     m_loadingIndicator->start();
-
-    auto timer = new QTimer(this);
-    timer->setInterval(500);
-
-    connect(timer, &QTimer::timeout, this, [this]() {
-        m_totalSizeExportLabel->setText(
-            QString("Total size to export: %1")
-                .arg(iDescriptor::Utils::formatSize(m_totalExportSize.load())));
-    });
-
-    timer->start();
-
-    QThreadPool::globalInstance()->start([this, timer]() {
-        for (const QString &item : m_exportItems) {
-            if (m_exiting.load()) {
-                return;
-            }
-
-            int size = m_device->afc_backend->get_file_size(item);
-            this->m_totalExportSize += size;
-        }
-
-        QMetaObject::invokeMethod(
-            this,
-            [this, timer]() {
-                if (m_exiting.load()) {
-                    return;
-                }
-                timer->stop();
-                timer->deleteLater();
-                this->m_totalSizeExportLabel->setText(
-                    QString("Total size to export: %1")
-                        .arg(iDescriptor::Utils::formatSize(
-                            this->m_totalExportSize.load())));
-                this->m_loadingIndicator->stop();
-                this->m_loadingIndicator->hide();
-            },
-            Qt::QueuedConnection);
-    });
+    emit requestTotalSize(m_exportItems);
 }
 
 ExportAlbum::~ExportAlbum()
 {
-    if (m_watcher) {
-        qDebug() << "Cancelling ongoing scan in ExportAlbum destructor";
-        m_watcher->cancel();
-        // m_watcher->waitForFinished();
-        m_watcher->deleteLater();
+    m_exiting = true;
+    emit requestCancelWorker();
+
+    if (m_workerThread && m_workerThread->isRunning()) {
+        m_workerThread->quit();
+        m_workerThread->wait();
     }
 }
