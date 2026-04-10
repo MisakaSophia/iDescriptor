@@ -262,7 +262,7 @@ void AppInstallDialog::onInstallClicked()
     }
 
     startDownloadProcess(m_bundleId, m_tempDir->path(), buttonIndex, false,
-                         false, true);
+                         true);
 
     connect(
         this, &AppDownloadBaseDialog::downloadFinished, this,
