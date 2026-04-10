@@ -79,7 +79,7 @@ private:
     QSocketNotifier *m_socketNotifier;
 
     mutable QMutex m_devicesMutex;
-    QList<NetworkDevice> m_networkDevices;
+    QMap<QString, NetworkDevice> m_networkDevices;
     bool m_running;
 
     // Temporary storage for devices being resolved

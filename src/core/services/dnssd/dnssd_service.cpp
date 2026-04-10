@@ -83,10 +83,17 @@ void DnssdService::stopBrowsing()
     m_pendingDevices.clear();
 }
 
-QList<NetworkDevice> DnssdService::getNetworkDevices() const
+QMap<QString, NetworkDevice> DnssdService::getNetworkDevices() const
 {
     QMutexLocker locker(&m_devicesMutex);
     return m_networkDevices;
+}
+
+NetworkDevice
+DnssdService::getNetworkDeviceByMac(const QString &macAddress) const
+{
+    QMutexLocker locker(&m_devicesMutex);
+    return m_networkDevices.value(macAddress, NetworkDevice());
 }
 
 void DnssdService::processDnssdEvents()
@@ -272,14 +279,13 @@ void DNSSD_API DnssdService::addrInfoCallback(
             friendlyName.left(friendlyName.length() - 7); // Remove ".local."
     }
 
-    QString deviceName;
     // Try to get device name from TXT records first
     if (pending.txt.contains("DvNm")) {
         deviceName = pending.txt["DvNm"];
-        qDebug() << "Device name from DvNm TXT record:" << device.name;
+        qDebug() << "Device name from DvNm TXT record:" << deviceName;
     } else if (pending.txt.contains("Name")) {
         deviceName = pending.txt["Name"];
-        qDebug() << "Device name from Name TXT record:" << device.name;
+        qDebug() << "Device name from Name TXT record:" << deviceName;
     } else {
         qDebug() << "Using hostname as device name:" << friendlyName;
         deviceName = friendlyName;
@@ -295,9 +301,9 @@ void DNSSD_API DnssdService::addrInfoCallback(
     // Add to our list if not already present
     {
         QMutexLocker locker(&service->m_devicesMutex);
-        bool exists = m_networkDevices.contains(pending.macAddress);
+        bool exists = service->m_networkDevices.contains(pending.macAddress);
         if (!exists) {
-            service->m_networkDevices.append(device);
+            service->m_networkDevices[device.macAddress] = device;
             emit service->deviceAdded(device);
         }
     }
