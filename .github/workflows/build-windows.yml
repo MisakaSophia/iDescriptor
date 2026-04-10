@@ -77,7 +77,14 @@ jobs:
           mingw-w64-x86_64-gst-plugins-ugly \
           mingw-w64-x86_64-gst-libav \
           mingw-w64-x86_64-libheif \
-          mingw-w64-x86_64-libarchive
+          mingw-w64-x86_64-libarchive \
+          mingw-w64-x86_64-rustup
+
+      - name: Setup rust toolchain
+        run: |
+          rustup toolchain install stable-x86_64-pc-windows-gnu
+          rustup default stable-x86_64-pc-windows-gnu
+          rustup toolchain list
 
       - uses: actions/setup-dotnet@v5
         with:
