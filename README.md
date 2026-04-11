@@ -1,15 +1,9 @@
-# THIS BRANCH IS UNDER DEVELOPMENT
-
-## Migrating to new backend -> https://github.com/jkcoxson/idevice
-
-## Only builds on Linux for now
-
 <p align="center" style="text-align: center">
   <img src="./resources/icons/app-icon/icon.png" width="25%"><br/>
 </p>
 
 <p align="center">
-    Cross-platform, open-source and free idevice management tool written in C++
+    Cross-platform, open-source and free idevice management tool written in Rust and Qt
   <br/>
   <br/>
   <a href="https://github.com/iDescriptor/iDescriptor/blob/main/LICENSE">
