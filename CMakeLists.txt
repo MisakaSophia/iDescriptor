@@ -138,6 +138,7 @@ endif()
 cxx_qt_import_crate(
     MANIFEST_PATH src/rust/Cargo.toml 
     CRATES idescriptor_rust_codebase 
+    LOCKED 
     QT_MODULES Qt::Core Qt::Gui Qt::Qml Qt::QuickControls2
 )
 
