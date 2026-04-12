@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-    Cross-platform, open-source and free idevice management tool written in Rust and Qt
+    Cross-platform, open-source and free idevice management tool written in Rust <img src="https://rustacean.net/assets/rustacean-orig-noshadow.svg" width="25"> and Qt
   <br/>
   <br/>
   <a href="https://github.com/iDescriptor/iDescriptor/blob/main/LICENSE">
@@ -19,6 +19,7 @@
     <img alt="GitHub tag (latest SemVer pre-release)" src="https://img.shields.io/github/v/tag/iDescriptor/iDescriptor?include_prereleases&label=version"/>
   </a>
   <img alt="Platform" src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue.svg"/>
+  <img src="https://shields.io/badge/-Rust-3776AB?style=flat&logo=rust" >
   <img alt="Language" src="https://img.shields.io/badge/C++-20-hotpink.svg"/>
   <img alt="Qt" src="https://img.shields.io/badge/Qt-6-brightgreen.svg"/>
   <a href="https://github.com/iDescriptor/iDescriptor/releases">
@@ -103,19 +104,23 @@ make sure to do "sudo pacman -Syu" otherwise it's not going to find libimobilede
 <hr/>
 <br/>
 
+# Windows 11 Dark (Acrylic) - v0.4.0
+
+<p align="center">
+    <img src="./resources/repo/win-11-mica-dark.png"><br/>
+</p>
+
+# Windows 11 Light (Acrylic) - v0.4.0
+
+<p align="center">
+    <img src="./resources/repo/win-11-mica-light.png"><br/>
+</p>
+
+# Other platforms
+
 <p align="center">
     <img src="./resources/repo/crossplatform.png"><br/>
 </p>
-
-</br>
-</br>
-</br>
-
-## Good News!
-
-### iDescriptor v0.4.0 will feature **WIRELESS CONNECTION** support!
-
-Learn more about our roadmap [here](#roadmap).
 
 </br>
 </br>
@@ -125,36 +130,28 @@ Learn more about our roadmap [here](#roadmap).
 
 ### Connection
 
-| Feature             | Status               | Notes                                                         |
-| ------------------- | -------------------- | ------------------------------------------------------------- |
-| USB Connection      | ✅ Implemented       | Fully supported on Windows, macOS, and Linux.                 |
-| Wireless Connection | ⚠️ Under Development | Currently under development, planned to be released in v0.4.0 |
+| Feature             | Status         | Notes                                         |
+| ------------------- | -------------- | --------------------------------------------- |
+| USB Connection      | ✅ Implemented | Fully supported on Windows, macOS, and Linux. |
+| Wireless Connection | ✅ Implemented | Starting from v0.4.0                          |
 
 ### Tools
 
-| Feature                                                | Status         | Notes                                                                                 |
-| ------------------------------------------------------ | -------------- | ------------------------------------------------------------------------------------- |
-| [AirPlay](#airplay)                                    | ✅ Implemented | Cast your device screen to your computer.                                             |
-| [Download & Install Apps From Apple Store](#app-store) | ✅ Implemented | Download and install apps directly from the Apple Store.                              |
-| [Virtual Location](#virtual-location)                  | ✅ Implemented | Simulate GPS location. Requires a mounted Developer Disk Image. **( iOS 6 - iOS 16)** |
-| [iFuse Filesystem Mount](#ifuse-filesystem-mount)      | ✅ Implemented | Mount the device's filesystem. (Windows & Linux only)                                 |
-| Gallery                                                | ✅ Implemented | -                                                                                     |
-| File Explorer                                          | ✅ Implemented | Explore the device's filesystem.                                                      |
-| Wireless Gallery Import                                | ✅ Implemented | Import photos wirelessly (requires the Shortcuts app on the iDevice).                 |
-| [Cable Info](#cable-info)                              | ✅ Implemented | Check authenticity of connected USB cables and more.                                  |
-| [Network Device Discovery](#network-device-discovery)  | ✅ Implemented | Discover and monitor devices on your local network.                                   |
-| [SSH Terminal](#ssh-terminal) **(Jailbroken)**         | ✅ Implemented | Open up a terminal on your iDevice.                                                   |
-| Query MobileGestalt                                    | ✅ Implemented | Read detailed hardware and software information from the device.                      |
-| [Live Screen](#live-screen)                            | ✅ Implemented | View your device's screen in real-time **(wired)**.                                   |
-| Developer Disk Images                                  | ✅ Implemented | Manage and mount developer disk images. **( iOS 6 - iOS 16)**                         |
-
-### Device Actions
-
-| Feature             | Status         | Notes |
-| ------------------- | -------------- | ----- |
-| Restart Device      | ✅ Implemented | -     |
-| Shutdown Device     | ✅ Implemented | -     |
-| Enter Recovery Mode | ✅ Implemented | -     |
+| Feature                                                | Status         | Notes                                                                 |
+| ------------------------------------------------------ | -------------- | --------------------------------------------------------------------- |
+| [AirPlay](#airplay)                                    | ✅ Implemented | Cast your device screen to your computer.                             |
+| [Download & Install Apps From Apple Store](#app-store) | ✅ Implemented | Download and install apps directly from the Apple Store.              |
+| [Virtual Location](#virtual-location)                  | ✅ Implemented | Simulate GPS location. Requires a mounted Developer Disk Image.       |
+| [iFuse Filesystem Mount](#ifuse-filesystem-mount)      | ✅ Implemented | Mount the device's filesystem. (Windows & Linux only)                 |
+| Gallery                                                | ✅ Implemented | -                                                                     |
+| File Explorer                                          | ✅ Implemented | Explore the device's filesystem.                                      |
+| Wireless Gallery Import                                | ✅ Implemented | Import photos wirelessly (requires the Shortcuts app on the iDevice). |
+| [Cable Info](#cable-info)                              | ✅ Implemented | Check authenticity of connected USB cables and more.                  |
+| [Network Device Discovery](#network-device-discovery)  | ✅ Implemented | Discover and monitor devices on your local network.                   |
+| [SSH Terminal](#ssh-terminal) **(Jailbroken)**         | ✅ Implemented | Open up a terminal on your iDevice.                                   |
+| Query MobileGestalt                                    | ✅ Implemented | Read detailed hardware and software information from the device.      |
+| [Live Screen](#live-screen)                            | ✅ Implemented | View your device's screen in real-time.                               |
+| Developer Disk Images                                  | ✅ Implemented | Manage and mount developer disk images. **( iOS 6- 16)**              |
 
 ## Fully Theme Aware
 
@@ -290,6 +287,8 @@ Sun 6 Jul - 14:30  ~ 
 @uncore  sudo udevadm control --reload-rules
 sudo udevadm trigger
 ```
+
+For more info [UDEV.md](./UDEV.md)
 
 # Contributing
 
