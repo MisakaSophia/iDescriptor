@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(iDescriptor VERSION 0.4.0 LANGUAGES C CXX)
+project(iDescriptor VERSION 0.5.0 LANGUAGES C CXX)
 
 if(WIN32)
     set(PKG_CONFIG_EXECUTABLE "C:/msys64/mingw64/bin/pkg-config.exe" CACHE FILEPATH "" FORCE)
