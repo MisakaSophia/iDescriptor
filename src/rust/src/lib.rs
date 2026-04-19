@@ -272,7 +272,8 @@ impl qobject::Core {
             let t = TcpProvider {  
                 addr,  
                 pairing_file,  
-                label: APP_LABEL.to_string(),  
+                label: APP_LABEL.to_string(),
+                scope_id : None  
             };
 
 

@@ -1246,7 +1246,7 @@ dependencies = [
 
 [[package]]
 name = "idevice"
-version = "0.1.57"
+version = "0.1.58"
 dependencies = [
  "aes",
  "async-stream",
@@ -1265,6 +1265,7 @@ dependencies = [
  "indexmap",
  "jktcp",
  "json",
+ "libc",
  "ns-keyed-archive",
  "plist",
  "plist-macro",
