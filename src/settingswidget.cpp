@@ -235,7 +235,7 @@ void SettingsWidget::setupUI()
 #ifdef __linux__
     m_useLegacyPortsCheckbox = new QCheckBox("Use legacy ports");
     m_useLegacyPortsCheckbox->setToolTip(
-        "Use legacy AirPlay port behavior for compatibility.");
+        "Use legacy ports, refer to AIRPLAY.md for more information.");
     airplayLayout->addWidget(m_useLegacyPortsCheckbox);
 
     m_showV4L2CheckBox = new QCheckBox("Show V4L2 Button on AirPlay Widget");
