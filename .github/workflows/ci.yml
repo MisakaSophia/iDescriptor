@@ -3,8 +3,6 @@ name: iDescriptor CI (Linux)
 on:
   workflow_dispatch:
   push:
-    tags-ignore:
-      - "*"
     paths:
       - "**.cpp"
       - "**.h"
