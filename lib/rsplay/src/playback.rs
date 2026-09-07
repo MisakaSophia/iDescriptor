@@ -17,16 +17,22 @@ use gstreamer::prelude::*;
 use gstreamer_app as gst_app;
 use log::{debug, error, warn};
 use shairplay::{
-    AudioFormat, AudioHandler, AudioSession, PacketKind, VideoHandler, VideoPacket, VideoSession,
+    AudioCodec, AudioFormat, AudioHandler, AudioSession, PacketKind, VideoHandler, VideoPacket,
+    VideoSession,
 };
 use tokio::sync::mpsc;
 
 use crate::receiver::ReceiverEvent;
 
-const AUDIO_PIPELINE: &str = concat!(
-    "appsrc name=audio_source is-live=true format=time do-timestamp=true block=false ",
+const PCM_AUDIO_PIPELINE: &str = concat!(
+    "appsrc name=audio_source is-live=true format=time block=false ",
     "! queue ! audioconvert ! audioresample ! volume name=master_volume ",
-    "! level ! autoaudiosink sync=true"
+    "! level ! autoaudiosink sync=false"
+);
+const AAC_ELD_AUDIO_PIPELINE: &str = concat!(
+    "appsrc name=audio_source is-live=true format=time block=false ",
+    "! queue ! avdec_aac ! audioconvert ! audioresample ",
+    "! volume name=master_volume ! level ! autoaudiosink sync=false"
 );
 
 /// GStreamer-backed AirPlay playback and connection event adapter.
@@ -197,26 +203,53 @@ impl Drop for TrackedVideoSession {
 }
 
 struct GstAudioSession {
+    codec: AudioCodec,
     pipeline: gst::Pipeline,
     appsrc: gst_app::AppSrc,
     volume: gst::Element,
     volume_bits: Arc<AtomicU32>,
     applied_volume_bits: u32,
+    buffers_pushed: u64,
 }
 
 impl GstAudioSession {
     fn new(format: AudioFormat, volume_bits: Arc<AtomicU32>) -> Result<Self> {
-        let pipeline = pipeline_from_description(AUDIO_PIPELINE, "audio")?;
+        if format.codec == AudioCodec::AacEld
+            && (format.sample_rate != 44_100 || format.channels != 2)
+        {
+            return Err(anyhow!(
+                "unsupported AAC-ELD format: {} Hz, {} channels",
+                format.sample_rate,
+                format.channels
+            ));
+        }
+        let description = match format.codec {
+            AudioCodec::Pcm => PCM_AUDIO_PIPELINE,
+            AudioCodec::AacEld => AAC_ELD_AUDIO_PIPELINE,
+        };
+        let pipeline = pipeline_from_description(description, "audio")?;
         let appsrc = appsrc(&pipeline, "audio_source")?;
         let volume = pipeline
             .by_name("master_volume")
             .context("the AirPlay audio pipeline has no volume element")?;
-        let caps = gst::Caps::builder("audio/x-raw")
-            .field("format", "F32LE")
-            .field("layout", "interleaved")
-            .field("rate", format.sample_rate as i32)
-            .field("channels", format.channels as i32)
-            .build();
+        let caps = match format.codec {
+            AudioCodec::Pcm => gst::Caps::builder("audio/x-raw")
+                .field("format", "F32LE")
+                .field("layout", "interleaved")
+                .field("rate", format.sample_rate as i32)
+                .field("channels", format.channels as i32)
+                .build(),
+            AudioCodec::AacEld => gst::Caps::builder("audio/mpeg")
+                .field("mpegversion", 4_i32)
+                .field("stream-format", "raw")
+                .field("rate", format.sample_rate as i32)
+                .field("channels", format.channels as i32)
+                .field(
+                    "codec_data",
+                    gst::Buffer::from_slice([0xf8_u8, 0xe8, 0x50, 0x00]),
+                )
+                .build(),
+        };
         appsrc.set_caps(Some(&caps));
 
         let applied_volume_bits = volume_bits.load(Ordering::Relaxed);
@@ -225,12 +258,18 @@ impl GstAudioSession {
         clock.set_property("clock-type", gst::ClockType::Realtime);
         pipeline.use_clock(Some(&clock));
         start_pipeline(&pipeline, "audio")?;
+        debug!(
+            "Started AirPlay audio pipeline: {:?}, {} Hz, {} channels",
+            format.codec, format.sample_rate, format.channels
+        );
         Ok(Self {
+            codec: format.codec,
             pipeline,
             appsrc,
             volume,
             volume_bits,
             applied_volume_bits,
+            buffers_pushed: 0,
         })
     }
 
@@ -242,16 +281,62 @@ impl GstAudioSession {
             self.applied_volume_bits = current;
         }
     }
+
+    fn push_buffer(&mut self, bytes: Vec<u8>) {
+        match self.appsrc.push_buffer(gst::Buffer::from_mut_slice(bytes)) {
+            Ok(_) => self.buffers_pushed += 1,
+            Err(err) => error!("GStreamer rejected an AirPlay audio buffer: {err:?}"),
+        }
+        poll_bus(&self.pipeline, "audio");
+    }
 }
 
 impl AudioSession for GstAudioSession {
     fn audio_process(&mut self, samples: &[f32]) {
-        self.apply_volume();
-        let bytes = bytemuck::cast_slice(samples).to_vec();
-        if let Err(err) = self.appsrc.push_buffer(gst::Buffer::from_mut_slice(bytes)) {
-            error!("GStreamer rejected an AirPlay audio buffer: {err:?}");
+        if samples.is_empty() {
+            return;
         }
-        poll_bus(&self.pipeline, "audio");
+        if self.codec != AudioCodec::Pcm {
+            warn!(
+                "Ignored PCM samples delivered to a {:?} audio session",
+                self.codec
+            );
+            return;
+        }
+        self.apply_volume();
+        let first_buffer = self.buffers_pushed == 0;
+        self.push_buffer(bytemuck::cast_slice(samples).to_vec());
+        if first_buffer && self.buffers_pushed == 1 {
+            let peak = samples
+                .iter()
+                .fold(0.0_f32, |peak, sample| peak.max(sample.abs()));
+            debug!(
+                "Pushed first decoded AirPlay PCM buffer: {} samples, peak={peak:.4}",
+                samples.len()
+            );
+        }
+    }
+
+    fn audio_process_encoded(&mut self, data: &[u8]) {
+        if data.is_empty() {
+            return;
+        }
+        if self.codec != AudioCodec::AacEld {
+            warn!(
+                "Ignored AAC-ELD data delivered to a {:?} audio session",
+                self.codec
+            );
+            return;
+        }
+        self.apply_volume();
+        let first_buffer = self.buffers_pushed == 0;
+        self.push_buffer(data.to_vec());
+        if first_buffer && self.buffers_pushed == 1 {
+            debug!(
+                "Pushed first decrypted AirPlay AAC-ELD access unit: {} bytes",
+                data.len()
+            );
+        }
     }
 
     fn audio_flush(&mut self) {
@@ -633,10 +718,12 @@ mod tests {
 
     #[test]
     fn preserves_uxplay_audio_output_chain() {
-        assert!(AUDIO_PIPELINE.contains(
-            "! queue ! audioconvert ! audioresample ! volume name=master_volume ! level ! autoaudiosink sync=true"
+        assert!(PCM_AUDIO_PIPELINE.contains(
+            "! queue ! audioconvert ! audioresample ! volume name=master_volume ! level ! autoaudiosink sync=false"
         ));
-        assert!(!AUDIO_PIPELINE.contains("leaky="));
+        assert!(!PCM_AUDIO_PIPELINE.contains("do-timestamp=true"));
+        assert!(!PCM_AUDIO_PIPELINE.contains("leaky="));
+        assert!(AAC_ELD_AUDIO_PIPELINE.contains("! queue ! avdec_aac ! audioconvert"));
     }
 
     #[test]
