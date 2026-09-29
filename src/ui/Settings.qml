@@ -51,6 +51,12 @@ DefaultWindow {
     property string window_effect: "normal"
     property string default_jailbroken_root_password: "alpine"
     property int airplay_fps: 60
+    property int airplay_width: 1920
+    property int airplay_height: 1080
+    property int airplay_refresh_rate: 60
+    property bool airplay_h265: false
+    property bool airplay_overscanned: false
+    property bool airplay_audio_start_on_launch: false
     property bool airplay_no_hold: true
     property bool airplay_use_legacy_ports: true
     property bool show_v4l2: false
@@ -152,6 +158,12 @@ DefaultWindow {
         window_effect = backendValue("window_effect", "normal")
         default_jailbroken_root_password = backendValue("default_jailbroken_root_password", "alpine")
         airplay_fps = backendValue("airplay_fps", 60)
+        airplay_width = backendValue("airplay_width", 1920)
+        airplay_height = backendValue("airplay_height", 1080)
+        airplay_refresh_rate = backendValue("airplay_refresh_rate", 60)
+        airplay_h265 = backendValue("airplay_h265", false)
+        airplay_overscanned = backendValue("airplay_overscanned", false)
+        airplay_audio_start_on_launch = backendValue("airplay_audio_start_on_launch", false)
         airplay_no_hold = backendValue("airplay_no_hold", true)
         airplay_use_legacy_ports = backendValue("airplay_use_legacy_ports", true)
         show_v4l2 = backendValue("show_v4l2", false)
@@ -184,6 +196,12 @@ DefaultWindow {
         callBackend("set_window_effect", window_effect)
         callBackend("set_default_jailbroken_root_password", default_jailbroken_root_password)
         callBackend("set_airplay_fps", airplay_fps)
+        callBackend("set_airplay_width", airplay_width)
+        callBackend("set_airplay_height", airplay_height)
+        callBackend("set_airplay_refresh_rate", airplay_refresh_rate)
+        callBackend("set_airplay_h265", airplay_h265)
+        callBackend("set_airplay_overscanned", airplay_overscanned)
+        callBackend("set_airplay_audio_start_on_launch", airplay_audio_start_on_launch)
         callBackend("set_airplay_no_hold", airplay_no_hold)
         callBackend("set_airplay_use_legacy_ports", airplay_use_legacy_ports)
         callBackend("set_show_v4l2", show_v4l2)
@@ -699,6 +717,74 @@ DefaultWindow {
                 SettingsSection {
                     title: qsTr("AirPlay")
 
+                    Switch {
+                        Layout.fillWidth: true
+                        text: qsTr("Start AirPlay audio receiver when iDescriptor starts")
+                        checked: root.airplay_audio_start_on_launch
+                        onToggled: {
+                            root.airplay_audio_start_on_launch = checked
+                            root.markDirty(false)
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+
+                        Label {
+                            text: qsTr("Resolution")
+                            Layout.preferredWidth: 175
+                        }
+
+                        ComboBox {
+                            readonly property var resolutions: [
+                                { label: "1280 × 720", width: 1280, height: 720 },
+                                { label: "1920 × 1080", width: 1920, height: 1080 },
+                                { label: "2560 × 1440", width: 2560, height: 1440 },
+                                { label: "3840 × 2160", width: 3840, height: 2160 }
+                            ]
+                            model: resolutions.map(function(item) { return item.label })
+                            currentIndex: {
+                                for (let i = 0; i < resolutions.length; ++i) {
+                                    if (resolutions[i].width === root.airplay_width
+                                            && resolutions[i].height === root.airplay_height)
+                                        return i
+                                }
+                                return 1
+                            }
+                            ToolTip.visible: hovered
+                            ToolTip.text: qsTr("Request this maximum display resolution from the AirPlay sender.")
+                            onActivated: {
+                                root.airplay_width = resolutions[currentIndex].width
+                                root.airplay_height = resolutions[currentIndex].height
+                                root.markDirty(false)
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+
+                        Label {
+                            text: qsTr("Refresh rate")
+                            Layout.preferredWidth: 175
+                        }
+
+                        ComboBox {
+                            model: ["24", "30", "60", "120"]
+                            currentIndex: Math.max(0, model.indexOf(String(root.airplay_refresh_rate)))
+                            onActivated: {
+                                root.airplay_refresh_rate = Number(currentText)
+                                root.markDirty(false)
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
+                    }
+
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 10
@@ -720,6 +806,30 @@ DefaultWindow {
                         }
 
                         Item { Layout.fillWidth: true }
+                    }
+
+                    Switch {
+                        Layout.fillWidth: true
+                        text: qsTr("Enable H.265 / HEVC")
+                        checked: root.airplay_h265
+                        ToolTip.visible: hovered
+                        ToolTip.text: qsTr("Allow compatible devices to use HEVC video, including resolutions up to 4K.")
+                        onToggled: {
+                            root.airplay_h265 = checked
+                            root.markDirty(false)
+                        }
+                    }
+
+                    Switch {
+                        Layout.fillWidth: true
+                        text: qsTr("Overscanned display")
+                        checked: root.airplay_overscanned
+                        ToolTip.visible: hovered
+                        ToolTip.text: qsTr("Tell the AirPlay sender that the display may crop content around its edges.")
+                        onToggled: {
+                            root.airplay_overscanned = checked
+                            root.markDirty(false)
+                        }
                     }
 
                     Switch {

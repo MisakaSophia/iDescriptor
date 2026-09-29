@@ -7,11 +7,13 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::{Context, Result, anyhow, bail};
 use log::{debug, info};
-use shairplay::{AirPlayMode, AudioHandler, PairingStore, RaopServer, VideoHandler};
+use rsplay::{
+    AirPlayMode, AudioHandler, DisplayConfig, PairingStore, RaopServer, ReceiverMode, VideoHandler,
+};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
-use crate::{
+use super::{
     discovery::{
         DiscoveryBackend, DiscoveryEvent, ServiceAdvertisement, ServiceKind, ZeroconfDiscovery,
     },
@@ -26,6 +28,14 @@ pub struct ReceiverConfig {
     /// RTSP port. Zero requests an operating-system assigned port.
     pub port: u16,
     pub max_clients: usize,
+    pub use_legacy_ports: bool,
+    pub display_width: u16,
+    pub display_height: u16,
+    pub display_refresh_rate: u8,
+    pub max_fps: u8,
+    pub overscanned: bool,
+    pub h265: bool,
+    pub audio_only: bool,
 }
 
 impl ReceiverConfig {
@@ -55,6 +65,9 @@ pub enum ReceiverEvent {
         name: String,
     },
     ClientDisconnected,
+    AudioActivityChanged {
+        active: bool,
+    },
     Error(String),
     Stopped,
 }
@@ -92,7 +105,23 @@ impl Receiver {
             .hwaddr(self.config.device_id)
             .port(self.config.port)
             .max_clients(self.config.max_clients)
-            .mode(AirPlayMode::AirPlay2)
+            .use_legacy_ports(self.config.use_legacy_ports)
+            .display(DisplayConfig {
+                width: self.config.display_width,
+                height: self.config.display_height,
+                refresh_rate: self.config.display_refresh_rate,
+                max_fps: self.config.max_fps,
+                overscanned: self.config.overscanned,
+            })
+            .h265(self.config.h265)
+            .receiver_mode(if self.config.audio_only {
+                ReceiverMode::AudioOnly
+            } else {
+                ReceiverMode::Mirroring
+            })
+            // Match UxPlay's legacy mirroring profile. Advertising the AirPlay 2
+            // profile makes iOS initiate HomeKit TLV/SRP pairing instead.
+            .mode(AirPlayMode::Mirroring)
             .pairing_store(self.pairing_store)
             .video_handler(video_handler)
             .build(audio_handler)

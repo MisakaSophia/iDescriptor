@@ -3,6 +3,7 @@
 
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import QtQuick.Window
 import QtMultimedia
@@ -32,6 +33,9 @@ ToolWindow {
     property string clientDeviceId: ""
     property string parsedModel: ""
     property int receiverPort: 0
+    // this is needed because the AirplayImp can only be used
+    // to start the audio receiver
+    property bool ownsReceiver: false
     readonly property real minimumDisplayScale: 0.5
     readonly property real maximumDisplayScale: 3.0
 
@@ -67,14 +71,24 @@ ToolWindow {
     }
 
     function startAirPlay() {
+        if (AirplayImp.mode === 2 && AirplayImp.audioActive) {
+            switchToMirroringDialog.open()
+            return
+        }
+        root.startMirroringBackend()
+    }
+
+    function startMirroringBackend() {
         root.serverRunning = false
         stateView.viewState = StateView.State.Loading
         root.startBackend()
     }
 
     function startBackend() {
-        const started = AirplayImp.init(video)
+        root.ownsReceiver = true
+    const started = AirplayImp.init(video)
         if (!started) {
+            root.ownsReceiver = false
             stateView.errorText = qsTr("Failed to start AirPlay.")
             stateView.viewState = StateView.State.Error
             return
@@ -91,7 +105,21 @@ ToolWindow {
 
     onClosing: {
         tutorialVideo.stop()
-        AirplayImp.cleanup()
+        if (root.ownsReceiver)
+            AirplayImp.cleanup()
+    }
+
+    MessageDialog {
+        id: switchToMirroringDialog
+        title: qsTr("Stop AirPlay Audio?")
+        text: qsTr("Audio is currently playing through iDescriptor. Starting Screen Mirroring will disconnect it.")
+        buttons: MessageDialog.Yes | MessageDialog.No
+        onButtonClicked: function(button, role) {
+            if (button === MessageDialog.Yes)
+                root.startMirroringBackend()
+            else
+                root.close()
+        }
     }
 
     Connections {

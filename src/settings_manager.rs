@@ -235,6 +235,18 @@ pub struct SettingsManager {
     set_app_version: qt_method!(fn(&self, version: QString)),
     airplay_fps: qt_method!(fn(&self) -> i32),
     set_airplay_fps: qt_method!(fn(&self, fps: i32)),
+    airplay_width: qt_method!(fn(&self) -> i32),
+    set_airplay_width: qt_method!(fn(&self, width: i32)),
+    airplay_height: qt_method!(fn(&self) -> i32),
+    set_airplay_height: qt_method!(fn(&self, height: i32)),
+    airplay_refresh_rate: qt_method!(fn(&self) -> i32),
+    set_airplay_refresh_rate: qt_method!(fn(&self, refresh_rate: i32)),
+    airplay_h265: qt_method!(fn(&self) -> bool),
+    set_airplay_h265: qt_method!(fn(&self, enabled: bool)),
+    airplay_overscanned: qt_method!(fn(&self) -> bool),
+    set_airplay_overscanned: qt_method!(fn(&self, enabled: bool)),
+    airplay_audio_start_on_launch: qt_method!(fn(&self) -> bool),
+    set_airplay_audio_start_on_launch: qt_method!(fn(&self, enabled: bool)),
     airplay_no_hold: qt_method!(fn(&self) -> bool),
     set_airplay_no_hold: qt_method!(fn(&self, no_hold: bool)),
     airplay_use_legacy_ports: qt_method!(fn(&self) -> bool),
@@ -264,6 +276,38 @@ pub struct SettingsManager {
 impl SettingsManager {
     pub(crate) fn unmount_ifuse_on_exit_enabled() -> bool {
         read_bool("unmountiFuseOnExit", false)
+    }
+
+    pub(crate) fn airplay_fps_value() -> u8 {
+        read_i32("airplayFps", 60).clamp(1, u8::MAX as i32) as u8
+    }
+
+    pub(crate) fn airplay_width_value() -> u16 {
+        read_i32("airplayWidth", 1920).clamp(1, u16::MAX as i32) as u16
+    }
+
+    pub(crate) fn airplay_height_value() -> u16 {
+        read_i32("airplayHeight", 1080).clamp(1, u16::MAX as i32) as u16
+    }
+
+    pub(crate) fn airplay_refresh_rate_value() -> u8 {
+        read_i32("airplayRefreshRate", 60).clamp(1, u8::MAX as i32) as u8
+    }
+
+    pub(crate) fn airplay_h265_enabled() -> bool {
+        read_bool("airplayH265", false)
+    }
+
+    pub(crate) fn airplay_overscanned_enabled() -> bool {
+        read_bool("airplayOverscanned", false)
+    }
+
+    pub(crate) fn airplay_use_legacy_ports_enabled() -> bool {
+        read_bool("airplayUseLegacyPorts", true)
+    }
+
+    pub(crate) fn airplay_audio_start_on_launch_enabled() -> bool {
+        read_bool("airplayAudioStartOnLaunch", false)
     }
 
     pub fn clear_all() {
@@ -700,6 +744,12 @@ impl SettingsManager {
         self.set_show_keychain_dialog(true);
         self.set_default_jailbroken_root_password(QString::from("alpine"));
         self.set_airplay_fps(60);
+        self.set_airplay_width(1920);
+        self.set_airplay_height(1080);
+        self.set_airplay_refresh_rate(60);
+        self.set_airplay_h265(false);
+        self.set_airplay_overscanned(false);
+        self.set_airplay_audio_start_on_launch(false);
         self.set_airplay_no_hold(true);
         self.set_wireless_file_server_port(8080);
         self.set_airplay_use_legacy_ports(true);
@@ -730,7 +780,55 @@ impl SettingsManager {
     }
 
     fn set_airplay_fps(&self, fps: i32) {
-        write_i32("airplayFps", fps);
+        write_i32("airplayFps", fps.clamp(1, u8::MAX as i32));
+    }
+
+    fn airplay_width(&self) -> i32 {
+        read_i32("airplayWidth", 1920)
+    }
+
+    fn set_airplay_width(&self, width: i32) {
+        write_i32("airplayWidth", width.clamp(1, u16::MAX as i32));
+    }
+
+    fn airplay_height(&self) -> i32 {
+        read_i32("airplayHeight", 1080)
+    }
+
+    fn set_airplay_height(&self, height: i32) {
+        write_i32("airplayHeight", height.clamp(1, u16::MAX as i32));
+    }
+
+    fn airplay_refresh_rate(&self) -> i32 {
+        read_i32("airplayRefreshRate", 60)
+    }
+
+    fn set_airplay_refresh_rate(&self, refresh_rate: i32) {
+        write_i32("airplayRefreshRate", refresh_rate.clamp(1, u8::MAX as i32));
+    }
+
+    fn airplay_h265(&self) -> bool {
+        Self::airplay_h265_enabled()
+    }
+
+    fn set_airplay_h265(&self, enabled: bool) {
+        write_bool("airplayH265", enabled);
+    }
+
+    fn airplay_overscanned(&self) -> bool {
+        Self::airplay_overscanned_enabled()
+    }
+
+    fn set_airplay_overscanned(&self, enabled: bool) {
+        write_bool("airplayOverscanned", enabled);
+    }
+
+    fn airplay_audio_start_on_launch(&self) -> bool {
+        Self::airplay_audio_start_on_launch_enabled()
+    }
+
+    fn set_airplay_audio_start_on_launch(&self, enabled: bool) {
+        write_bool("airplayAudioStartOnLaunch", enabled);
     }
 
     fn airplay_no_hold(&self) -> bool {

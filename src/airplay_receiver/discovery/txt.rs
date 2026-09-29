@@ -37,7 +37,7 @@ pub(super) fn airplay_advertisement(config: &DiscoveryConfig) -> ServiceAdvertis
 pub(super) fn raop_advertisement(config: &DiscoveryConfig) -> ServiceAdvertisement {
     let mut txt = BTreeMap::new();
     insert(&mut txt, "ch", "2");
-    insert(&mut txt, "cn", "0,1,2,3");
+    insert(&mut txt, "cn", "0,1,3");
     insert(&mut txt, "da", "true");
     insert(&mut txt, "et", "0,3,5");
     insert(&mut txt, "vv", AIRPLAY_PROTOCOL_VERSION);
@@ -78,8 +78,8 @@ const fn bool_string(value: bool) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    use super::super::{AccessControl, FeatureSet, ServiceKind};
     use super::*;
-    use crate::discovery::{AccessControl, FeatureSet, ServiceKind};
 
     fn config(access_control: AccessControl) -> DiscoveryConfig {
         DiscoveryConfig {
@@ -113,7 +113,7 @@ mod tests {
         let advertisement = raop_advertisement(&config(AccessControl::None));
         assert_eq!(advertisement.kind, ServiceKind::Raop);
         assert_eq!(advertisement.name, "001122AABBCC@iDescriptor@rsplay");
-        assert_eq!(advertisement.txt["cn"], "0,1,2,3");
+        assert_eq!(advertisement.txt["cn"], "0,1,3");
         assert_eq!(advertisement.txt["et"], "0,3,5");
         assert_eq!(advertisement.txt["ft"], "0x5A7FFEE6,0x0");
         assert_eq!(advertisement.txt["sf"], "0x4");

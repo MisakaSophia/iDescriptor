@@ -14,9 +14,9 @@ use anyhow::{Context, Result};
 use directories::ProjectDirs;
 use log::error;
 use rand::{RngCore, rngs::OsRng};
+use rsplay::PairingStore;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use shairplay::PairingStore;
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -35,7 +35,7 @@ pub struct PersistentPairingStore {
 impl PersistentPairingStore {
     /// Open the standard per-user iDescriptor pairing store.
     pub fn open_default() -> Result<Self> {
-        let project_dirs = ProjectDirs::from("com", "Uncore", "iDescriptor")
+        let project_dirs = ProjectDirs::from("com", "uncore", "iDescriptor")
             .context("the operating system did not provide a configuration directory")?;
         Self::open(project_dirs.config_dir().join("rsplay-pairings.json"))
     }

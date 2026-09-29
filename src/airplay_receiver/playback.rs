@@ -16,13 +16,13 @@ use gstreamer as gst;
 use gstreamer::prelude::*;
 use gstreamer_app as gst_app;
 use log::{debug, error, warn};
-use shairplay::{
+use rsplay::{
     AudioCodec, AudioFormat, AudioHandler, AudioSession, PacketKind, VideoHandler, VideoPacket,
     VideoSession,
 };
 use tokio::sync::mpsc;
 
-use crate::receiver::ReceiverEvent;
+use super::receiver::ReceiverEvent;
 
 const PCM_AUDIO_PIPELINE: &str = concat!(
     "appsrc name=audio_source is-live=true format=time block=false ",
@@ -34,6 +34,18 @@ const AAC_ELD_AUDIO_PIPELINE: &str = concat!(
     "! queue ! avdec_aac ! audioconvert ! audioresample ",
     "! volume name=master_volume ! level ! autoaudiosink sync=false"
 );
+const ALAC_AUDIO_PIPELINE: &str = concat!(
+    "appsrc name=audio_source is-live=true format=time block=false ",
+    "! queue ! avdec_alac ! audioconvert ! audioresample ",
+    "! volume name=master_volume ! level ! autoaudiosink sync=false"
+);
+
+// AirPlay ALAC magic cookie: 44100 Hz, 16-bit stereo, 352 samples per frame.
+const ALAC_CODEC_DATA: [u8; 36] = [
+    0x00, 0x00, 0x00, 0x24, 0x61, 0x6c, 0x61, 0x63, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x60,
+    0x00, 0x10, 0x28, 0x0a, 0x0e, 0x02, 0x00, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0xac, 0x44,
+];
 
 /// GStreamer-backed AirPlay playback and connection event adapter.
 pub struct GstreamerPlayback {
@@ -83,6 +95,17 @@ impl GstreamerPlayback {
         }))
     }
 
+    /// Initialize playback for an audio-only receiver without requiring a QML video sink.
+    pub fn new_audio_only(events: mpsc::UnboundedSender<ReceiverEvent>) -> Result<Arc<Self>> {
+        gst::init().context("failed to initialize GStreamer")?;
+        Ok(Arc::new(Self {
+            video_item: 0,
+            volume_bits: Arc::new(AtomicU32::new(1.0_f32.to_bits())),
+            connections: Arc::new(AtomicUsize::new(0)),
+            events,
+        }))
+    }
+
     /// Set application master volume in the inclusive range 0.0 to 1.0.
     pub fn set_volume(&self, volume: f32) {
         self.volume_bits
@@ -96,7 +119,7 @@ impl GstreamerPlayback {
 
 impl AudioHandler for GstreamerPlayback {
     fn audio_init(&self, format: AudioFormat) -> Box<dyn AudioSession> {
-        match GstAudioSession::new(format, self.volume_bits.clone()) {
+        match GstAudioSession::new(format, self.volume_bits.clone(), self.events.clone()) {
             Ok(session) => Box::new(session),
             Err(err) => {
                 self.send_error(format!("failed to start AirPlay audio: {err:#}"));
@@ -133,7 +156,7 @@ impl AudioHandler for GstreamerPlayback {
         });
     }
 
-    fn on_error(&self, err: &shairplay::ShairplayError) {
+    fn on_error(&self, err: &rsplay::ShairplayError) {
         self.send_error(err.to_string());
     }
 }
@@ -190,6 +213,10 @@ impl VideoSession for TrackedVideoSession {
         self.inner.on_video(packet);
     }
 
+    fn on_resolution_changed(&mut self, width: u32, height: u32) {
+        self.inner.on_resolution_changed(width, height);
+    }
+
     fn on_video_end(&mut self) {
         self.inner.on_video_end();
         self.finish();
@@ -210,10 +237,16 @@ struct GstAudioSession {
     volume_bits: Arc<AtomicU32>,
     applied_volume_bits: u32,
     buffers_pushed: u64,
+    events: mpsc::UnboundedSender<ReceiverEvent>,
+    active: bool,
 }
 
 impl GstAudioSession {
-    fn new(format: AudioFormat, volume_bits: Arc<AtomicU32>) -> Result<Self> {
+    fn new(
+        format: AudioFormat,
+        volume_bits: Arc<AtomicU32>,
+        events: mpsc::UnboundedSender<ReceiverEvent>,
+    ) -> Result<Self> {
         if format.codec == AudioCodec::AacEld
             && (format.sample_rate != 44_100 || format.channels != 2)
         {
@@ -225,6 +258,7 @@ impl GstAudioSession {
         }
         let description = match format.codec {
             AudioCodec::Pcm => PCM_AUDIO_PIPELINE,
+            AudioCodec::Alac => ALAC_AUDIO_PIPELINE,
             AudioCodec::AacEld => AAC_ELD_AUDIO_PIPELINE,
         };
         let pipeline = pipeline_from_description(description, "audio")?;
@@ -238,6 +272,13 @@ impl GstAudioSession {
                 .field("layout", "interleaved")
                 .field("rate", format.sample_rate as i32)
                 .field("channels", format.channels as i32)
+                .build(),
+            AudioCodec::Alac => gst::Caps::builder("audio/x-alac")
+                .field("mpegversion", 4_i32)
+                .field("stream-format", "raw")
+                .field("rate", format.sample_rate as i32)
+                .field("channels", format.channels as i32)
+                .field("codec_data", gst::Buffer::from_slice(ALAC_CODEC_DATA))
                 .build(),
             AudioCodec::AacEld => gst::Caps::builder("audio/mpeg")
                 .field("mpegversion", 4_i32)
@@ -270,6 +311,8 @@ impl GstAudioSession {
             volume_bits,
             applied_volume_bits,
             buffers_pushed: 0,
+            events,
+            active: false,
         })
     }
 
@@ -292,6 +335,16 @@ impl GstAudioSession {
 }
 
 impl AudioSession for GstAudioSession {
+    fn set_active(&mut self, active: bool) {
+        if self.active == active {
+            return;
+        }
+        self.active = active;
+        let _ = self
+            .events
+            .send(ReceiverEvent::AudioActivityChanged { active });
+    }
+
     fn audio_process(&mut self, samples: &[f32]) {
         if samples.is_empty() {
             return;
@@ -321,9 +374,9 @@ impl AudioSession for GstAudioSession {
         if data.is_empty() {
             return;
         }
-        if self.codec != AudioCodec::AacEld {
+        if !matches!(self.codec, AudioCodec::Alac | AudioCodec::AacEld) {
             warn!(
-                "Ignored AAC-ELD data delivered to a {:?} audio session",
+                "Ignored encoded audio data delivered to a {:?} audio session",
                 self.codec
             );
             return;
@@ -333,7 +386,8 @@ impl AudioSession for GstAudioSession {
         self.push_buffer(data.to_vec());
         if first_buffer && self.buffers_pushed == 1 {
             debug!(
-                "Pushed first decrypted AirPlay AAC-ELD access unit: {} bytes",
+                "Pushed first decrypted AirPlay {:?} access unit: {} bytes",
+                self.codec,
                 data.len()
             );
         }
@@ -343,10 +397,18 @@ impl AudioSession for GstAudioSession {
         let _ = self.pipeline.send_event(gst::event::FlushStart::new());
         let _ = self.pipeline.send_event(gst::event::FlushStop::new(true));
     }
+
+    fn set_volume(&mut self, volume: f32) {
+        let volume = volume.clamp(0.0, 1.0);
+        self.volume_bits.store(volume.to_bits(), Ordering::Relaxed);
+        self.volume.set_property("volume", volume as f64);
+        self.applied_volume_bits = volume.to_bits();
+    }
 }
 
 impl Drop for GstAudioSession {
     fn drop(&mut self) {
+        self.set_active(false);
         stop_pipeline(&self.pipeline, Some(&self.appsrc), "audio");
     }
 }
@@ -401,8 +463,6 @@ impl GstVideoSession {
             .build();
         appsrc.set_caps(Some(&caps));
 
-        // UxPlay renders against a realtime system clock. Keep the same clock
-        // selection even though qml6glsink itself remains sync=false.
         let clock = gst::SystemClock::obtain();
         clock.set_property("clock-type", gst::ClockType::Realtime);
         pipeline.use_clock(Some(&clock));
@@ -414,7 +474,7 @@ impl GstVideoSession {
         Ok(GstVideoRenderer { pipeline, appsrc })
     }
 
-    fn configure(&mut self, codec: VideoCodec, payload: &[u8]) -> Result<()> {
+    fn configure(&mut self, codec: VideoCodec, _payload: &[u8]) -> Result<()> {
         if let Some(previous) = self.codec
             && previous != codec
         {
@@ -422,15 +482,14 @@ impl GstVideoSession {
                 "the AirPlay video codec changed from {previous:?} to {codec:?}"
             ));
         }
-        let parameter_sets = match codec {
-            VideoCodec::H264 => h264_parameter_sets(payload)?,
-            VideoCodec::H265 => h265_parameter_sets(payload)?,
-        };
         if self.renderer.is_none() {
             self.renderer = Some(self.create_renderer(codec)?);
         }
         self.codec = Some(codec);
-        self.pending_parameter_sets = parameter_sets;
+        // rsplay_core caches these sets and prepends them to the following
+        // access unit. Retaining another copy here would send the
+        // SPS/PPS twice to h264parse.
+        self.pending_parameter_sets.clear();
         debug!("Configured the rsplay GStreamer pipeline for {codec:?}");
         Ok(())
     }
@@ -446,7 +505,7 @@ impl GstVideoSession {
         bytes.append(&mut self.pending_parameter_sets);
         bytes.extend_from_slice(&converted);
         let mut buffer = gst::Buffer::from_mut_slice(bytes);
-        let remote_ns = ntp_timestamp_to_nanos(timestamp);
+        let remote_ns = timestamp;
         let first_remote_ns = *self.first_remote_timestamp.get_or_insert(remote_ns);
         if let Some(buffer) = buffer.get_mut() {
             buffer.set_pts(gst::ClockTime::from_nseconds(
@@ -498,6 +557,18 @@ impl VideoSession for GstVideoSession {
     fn on_video_end(&mut self) {
         if let Some(renderer) = &self.renderer {
             stop_pipeline(&renderer.pipeline, Some(&renderer.appsrc), "video");
+        }
+    }
+
+    fn on_video_pause(&mut self) {
+        if let Some(renderer) = &self.renderer {
+            let _ = renderer.pipeline.set_state(gst::State::Paused);
+        }
+    }
+
+    fn on_video_resume(&mut self) {
+        if let Some(renderer) = &self.renderer {
+            let _ = renderer.pipeline.set_state(gst::State::Playing);
         }
     }
 }
@@ -588,7 +659,7 @@ fn video_pipeline_description(codec: VideoCodec) -> String {
 }
 
 fn color_conversion_pipeline() -> &'static str {
-    // UxPlay enables its full-range sRGB correction by default on Linux/BSD.
+    // Enable full-range sRGB correction by default on Linux/BSD.
     // AppImage's GStreamer 1.20 baseline requires RGBA for GstGLQt6VideoItem.
     #[cfg(all(unix, not(target_vendor = "apple"), feature = "appimage"))]
     {
@@ -604,13 +675,19 @@ fn color_conversion_pipeline() -> &'static str {
     }
 }
 
-fn ntp_timestamp_to_nanos(timestamp: u64) -> u64 {
-    let seconds = timestamp >> 32;
-    let fraction = timestamp & 0xFFFF_FFFF;
-    seconds.saturating_mul(1_000_000_000) + ((fraction * 1_000_000_000) >> 32)
-}
-
 fn nal_units_to_byte_stream(payload: &[u8]) -> Result<Vec<u8>> {
+    if starts_with_annex_b_start_code(payload) {
+        if annex_b_nal_units(payload)
+            .iter()
+            .any(|nal| nal.is_empty() || nal[0] & 0x80 != 0)
+        {
+            return Err(anyhow!(
+                "AirPlay video decryption produced an invalid NAL unit"
+            ));
+        }
+        return Ok(payload.to_vec());
+    }
+
     let mut output = Vec::with_capacity(payload.len());
     let mut offset = 0;
     while offset < payload.len() {
@@ -636,53 +713,37 @@ fn nal_units_to_byte_stream(payload: &[u8]) -> Result<Vec<u8>> {
     Ok(output)
 }
 
-fn h264_parameter_sets(payload: &[u8]) -> Result<Vec<u8>> {
-    let sps_len = read_be_u16(payload, 6)? as usize;
-    let sps = payload.get(8..8 + sps_len).context("truncated H.264 SPS")?;
-    let pps_len_offset = 9 + sps_len;
-    let pps_len = read_be_u16(payload, pps_len_offset)? as usize;
-    let pps = payload
-        .get(pps_len_offset + 2..pps_len_offset + 2 + pps_len)
-        .context("truncated H.264 PPS")?;
-    Ok(join_parameter_sets([sps, pps]))
+fn starts_with_annex_b_start_code(payload: &[u8]) -> bool {
+    payload.starts_with(&[0, 0, 0, 1]) || payload.starts_with(&[0, 0, 1])
 }
 
-fn h265_parameter_sets(payload: &[u8]) -> Result<Vec<u8>> {
-    let mut offset = 0x75;
-    let mut sets = Vec::new();
-    for expected_tag in [0xA0_u8, 0xA1, 0xA2] {
-        let header = payload
-            .get(offset..offset + 5)
-            .context("truncated H.265 parameter-set header")?;
-        if header[..3] != [expected_tag, 0, 1] {
-            return Err(anyhow!("invalid H.265 parameter-set tag"));
-        }
-        let length = u16::from_be_bytes([header[3], header[4]]) as usize;
-        offset += 5;
-        let parameter_set = payload
-            .get(offset..offset + length)
-            .context("truncated H.265 parameter set")?;
-        sets.extend_from_slice(&[0, 0, 0, 1]);
-        sets.extend_from_slice(parameter_set);
-        offset += length;
+fn annex_b_nal_units(payload: &[u8]) -> Vec<&[u8]> {
+    let mut starts = Vec::new();
+    let mut offset = 0;
+    while offset + 3 <= payload.len() {
+        let start_code_len = if payload[offset..].starts_with(&[0, 0, 0, 1]) {
+            4
+        } else if payload[offset..].starts_with(&[0, 0, 1]) {
+            3
+        } else {
+            offset += 1;
+            continue;
+        };
+        starts.push((offset, start_code_len));
+        offset += start_code_len;
     }
-    Ok(sets)
-}
 
-fn read_be_u16(bytes: &[u8], offset: usize) -> Result<u16> {
-    let value = bytes
-        .get(offset..offset + 2)
-        .context("truncated codec configuration")?;
-    Ok(u16::from_be_bytes([value[0], value[1]]))
-}
-
-fn join_parameter_sets<'a>(sets: impl IntoIterator<Item = &'a [u8]>) -> Vec<u8> {
-    let mut output = Vec::new();
-    for set in sets {
-        output.extend_from_slice(&[0, 0, 0, 1]);
-        output.extend_from_slice(set);
-    }
-    output
+    starts
+        .iter()
+        .enumerate()
+        .filter_map(|(index, (start, start_code_len))| {
+            let nal_start = start + start_code_len;
+            let nal_end = starts
+                .get(index + 1)
+                .map_or(payload.len(), |(next_start, _)| *next_start);
+            (nal_start < nal_end).then_some(&payload[nal_start..nal_end])
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -727,12 +788,15 @@ mod tests {
     }
 
     #[test]
-    fn converts_ntp_fixed_point_to_nanoseconds() {
-        assert_eq!(ntp_timestamp_to_nanos(2_u64 << 32), 2_000_000_000);
-        assert_eq!(
-            ntp_timestamp_to_nanos((2_u64 << 32) | 0x8000_0000),
-            2_500_000_000
-        );
+    fn accepts_annex_b_nals_without_converting_them_again() {
+        let input = [0, 0, 0, 1, 0x65, 0xAA, 0, 0, 1, 0x41];
+        assert_eq!(nal_units_to_byte_stream(&input).unwrap(), input);
+    }
+
+    #[test]
+    fn accepts_annex_b_h264_parameter_sets() {
+        let input = [0, 0, 0, 1, 0x67, 0x64, 0, 0, 0, 1, 0x68, 0xEE];
+        assert_eq!(nal_units_to_byte_stream(&input).unwrap(), input);
     }
 
     #[test]

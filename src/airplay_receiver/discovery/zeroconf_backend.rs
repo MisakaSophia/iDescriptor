@@ -325,8 +325,8 @@ mod tests {
 
     use tokio::time::{Duration, timeout};
 
+    use super::super::{AccessControl, FeatureSet, ServiceKind};
     use super::*;
-    use crate::discovery::{AccessControl, FeatureSet, ServiceKind};
 
     #[tokio::test(flavor = "multi_thread")]
     #[ignore = "requires multicast networking"]

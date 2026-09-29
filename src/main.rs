@@ -15,6 +15,7 @@ use tracing_subscriber::{EnvFilter, filter::LevelFilter, prelude::*};
 
 pub mod afc_services;
 pub mod airplay;
+mod airplay_receiver;
 pub mod apps;
 pub mod backup_manager;
 pub mod companion_protocol;

@@ -18,6 +18,8 @@ ApplicationWindow {
 
     Component.onCompleted: {
         Updater.checkAutomatically()
+        if (settingsManager.airplay_audio_start_on_launch())
+            Qt.callLater(function() { AirplayImp.start_audio() })
     }
 
     onClosing: function(close) {

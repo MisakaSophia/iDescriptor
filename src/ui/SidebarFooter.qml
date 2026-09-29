@@ -57,6 +57,59 @@ Item {
 
             Item { Layout.fillWidth: true }
 
+            IconToolButton {
+                id: audioReceiverButton
+
+                implicitWidth: 27
+                implicitHeight: 27
+                iconSize: 16
+                enabled: AirplayImp.mode !== 1
+                         && AirplayImp.state !== 1
+                         && AirplayImp.state !== 4
+                icon.source: "qrc:/resources/icons/material-symbols_airplay-outline-rounded.svg"
+                toolTipText: {
+                    if (AirplayImp.mode === 1)
+                        return qsTr("Close Screen Mirroring before starting the audio receiver")
+                    if (AirplayImp.state === 5)
+                        return qsTr("AirPlay audio receiver failed: %1").arg(AirplayImp.lastError)
+                    if (AirplayImp.audioActive)
+                        return AirplayImp.clientName.length > 0
+                                ? qsTr("Receiving AirPlay audio from %1").arg(AirplayImp.clientName)
+                                : qsTr("Receiving AirPlay audio")
+                    if (AirplayImp.mode === 2)
+                        return qsTr("AirPlay audio receiver is listening")
+                    return qsTr("Enable AirPlay audio receiver")
+                }
+                onClicked: {
+                    if (AirplayImp.mode === 2)
+                        AirplayImp.cleanup()
+                    else if (!AirplayImp.start_audio())
+                        audioReceiverError.open()
+                }
+
+                Rectangle {
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    anchors.rightMargin: 2
+                    anchors.bottomMargin: 2
+                    width: 7
+                    height: 7
+                    radius: width / 2
+                    visible: AirplayImp.mode === 2 || AirplayImp.state === 5
+                    color: {
+                        if (AirplayImp.state === 5)
+                            return "#e5484d"
+                        if (AirplayImp.audioActive)
+                            return "#30a46c"
+                        if (AirplayImp.state === 1 || AirplayImp.state === 4)
+                            return "#f5a524"
+                        return audioReceiverButton.palette.highlight
+                    }
+                    border.width: 1
+                    border.color: audioReceiverButton.palette.window
+                }
+            }
+
             Loader {
                 active: Qt.platform.os === "linux" || Qt.platform.os === "windows"
                 visible: active
@@ -151,4 +204,21 @@ Item {
         StatusWindow.registerOpener(Window.window, activityButton)
     }
     Component.onDestruction: StatusWindow.unregisterOpener(activityButton)
+
+    MessageDialog {
+        id: audioReceiverError
+        title: qsTr("AirPlay Audio Receiver")
+        text: AirplayImp.lastError.length > 0
+              ? AirplayImp.lastError
+              : qsTr("Failed to start the AirPlay audio receiver.")
+    }
+
+    Connections {
+        target: AirplayImp
+
+        function onBackendFailed(code, detail) {
+            if (AirplayImp.mode === 2)
+                audioReceiverError.open()
+        }
+    }
 }
