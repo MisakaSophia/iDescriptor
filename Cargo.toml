@@ -25,6 +25,12 @@ http-range-header = "0.4"
 idevice = { path = "lib/idevice-rs/idevice", features = ["full", "openssl"], default-features = false }
 uuid = { version = "1.22.0", features = ["v4"] }
 sha2 = "0.10"
+bytemuck = "1.24"
+directories = "6"
+gstreamer = "0.25.2"
+gstreamer-app = "0.25.2"
+rand = "0.8"
+serde = { version = "1", features = ["derive"] }
 plist = "1.8.0"
 plist-macro = "0.1.6"
 tracing = "0.1.44"
@@ -42,6 +48,7 @@ sqlite-vfs = "0.2.0"
 filetime = "0.2.27"
 priority-queue = "2.7.0"
 anyhow = "1.0.102"
+# ipatool = { path = "../ipatool-rs", default-features = false }
 ipatool = { version = "0.3.2", default-features = false }
 cpp = "0.5.11"
 cstr = "0.2.12"
@@ -51,7 +58,7 @@ url = "2.5.8"
 oneshot = "0.2.1"
 macros = { path = "lib/macros"}
 base64 = "0.22.1"
-reqwest = "0.13.4"
+reqwest = { version = "0.13.4", features = ["query"] }
 zip = "8.6.0"
 log = "0.4.33"
 ssh2 = "0.9"
@@ -59,8 +66,10 @@ hex = "0.4.3"
 irecovery = { version = "0.2.1", features = ["tokio"] }
 lru = "0.18.0"
 zupdater = { path= "lib/zupdater"}
-izeroconf = { git = "https://github.com/uncor3/izeroconf", default-features = false, features = ["pure-rust", "native-backend", "apple-mobile-device-metadata"] }
-rsplay = { path = "lib/rsplay" }
+# izeroconf = { path = "../izeroconf/zeroconf", default-features = false, features = ["pure-rust", "native-backend", "apple-mobile-device-metadata"] }
+izeroconf = { git = "https://github.com/uncor3/izeroconf", default-features = false, features = ["pure-rust", "native-backend", "apple-mobile-device-metadata"], rev = "e459d98a89dccd77e959cb45683e42150e46edd6" }
+# rsplay = { path = "../rsplay" }
+rsplay = { git = "https://github.com/iDescriptor/rsplay", rev = "44f559c8119b07ba9ca3fd274b9b6a29f3fe7c1d" }
 
 [target.'cfg(any(target_os = "linux", target_os = "windows"))'.dependencies]
 ifuse = { version = "0.1.1", default-features = false, features = ["openssl"] }
