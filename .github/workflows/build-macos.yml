@@ -23,9 +23,6 @@ jobs:
   build-macos:
     name: macOS ${{ matrix.arch }}
     environment: release
-    env:
-      HAS_MACOS_SIGNING: ${{ secrets.MACOS_CERTIFICATE_BASE64 != '' }}
-      HAS_MACOS_NOTARIZATION: ${{ secrets.APPLE_ID != '' && secrets.APPLE_APP_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -41,6 +38,32 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - name: Validate release credentials
+        env:
+          DEV_ID_P12_BASE64: ${{ secrets.DEV_ID_P12_BASE64 }}
+          DEV_ID_P12_PASSWORD: ${{ secrets.DEV_ID_P12_PASSWORD }}
+          DEV_IDENTITY_NAME: ${{ secrets.DEV_IDENTITY_NAME }}
+          NOTARIZE_APPLE_ID: ${{ secrets.NOTARIZE_APPLE_ID }}
+          NOTARIZE_APP_SPECIFIC_PASS: ${{ secrets.NOTARIZE_APP_SPECIFIC_PASS }}
+          NOTARIZE_TEAM_ID: ${{ secrets.NOTARIZE_TEAM_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(
+            DEV_ID_P12_BASE64
+            DEV_ID_P12_PASSWORD
+            DEV_IDENTITY_NAME
+            NOTARIZE_APPLE_ID
+            NOTARIZE_APP_SPECIFIC_PASS
+            NOTARIZE_TEAM_ID
+          )
+          for name in "${required[@]}"; do
+            if [ -z "${!name:-}" ]; then
+              echo "Missing required release secret: ${name}"
+              exit 1
+            fi
+          done
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
@@ -138,43 +161,40 @@ jobs:
           done
 
       - name: Import signing certificate
-        if: ${{ env.HAS_MACOS_SIGNING == 'true' }}
-        env:
-          MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
-          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-        run: |
-          certificate="$RUNNER_TEMP/idescriptor-signing.p12"
-          keychain="$RUNNER_TEMP/idescriptor-signing.keychain-db"
-          echo "$MACOS_CERTIFICATE_BASE64" | base64 --decode > "$certificate"
-          security create-keychain -p actions "$keychain"
-          security set-keychain-settings -lut 21600 "$keychain"
-          security unlock-keychain -p actions "$keychain"
-          security import "$certificate" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
-          security list-keychains -d user -s "$keychain"
-          security set-key-partition-list -S apple-tool:,apple: -s -k actions "$keychain"
+        uses: apple-actions/import-codesign-certs@v7
+        with:
+          p12-file-base64: ${{ secrets.DEV_ID_P12_BASE64 }}
+          p12-password: ${{ secrets.DEV_ID_P12_PASSWORD }}
 
       - name: Build with Cargo
         run: RUSTFLAGS="" cargo build --release
 
       - name: Deploy and create DMG
         env:
-          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          MACOS_SIGNING_IDENTITY: ${{ secrets.DEV_IDENTITY_NAME }}
         run: bash packaging/macos/dmg/deploy.sh "${{ matrix.arch }}" "${{ inputs.version }}"
 
+      - name: Verify signed artifacts
+        run: |
+          dmg="build/iDescriptor-${{ inputs.version }}-${{ matrix.arch == 'x86_64' && 'Apple_Intel' || 'Apple_Silicon' }}.dmg"
+          codesign --verify --deep --strict --verbose=2 build/iDescriptor.app
+          codesign --verify --strict --verbose=2 "$dmg"
+
       - name: Notarize DMG
-        if: ${{ env.HAS_MACOS_NOTARIZATION == 'true' }}
         env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          NOTARIZE_APPLE_ID: ${{ secrets.NOTARIZE_APPLE_ID }}
+          NOTARIZE_APP_SPECIFIC_PASS: ${{ secrets.NOTARIZE_APP_SPECIFIC_PASS }}
+          NOTARIZE_TEAM_ID: ${{ secrets.NOTARIZE_TEAM_ID }}
         run: |
           dmg="build/iDescriptor-${{ inputs.version }}-${{ matrix.arch == 'x86_64' && 'Apple_Intel' || 'Apple_Silicon' }}.dmg"
           xcrun notarytool submit "$dmg" \
-            --apple-id "$APPLE_ID" \
-            --password "$APPLE_APP_PASSWORD" \
-            --team-id "$APPLE_TEAM_ID" \
+            --apple-id "$NOTARIZE_APPLE_ID" \
+            --password "$NOTARIZE_APP_SPECIFIC_PASS" \
+            --team-id "$NOTARIZE_TEAM_ID" \
             --wait
           xcrun stapler staple "$dmg"
+          xcrun stapler validate "$dmg"
+          spctl --assess --type open --context context:primary-signature --verbose=4 "$dmg"
 
       - name: Validate DMG
         run: |
